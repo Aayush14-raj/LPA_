@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Layered Process Audit System</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
+  <!-- Role Select Page -->
+  <div id="roleSelectPage" class="min-h-screen flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-3xl">
+      <div class="text-center mb-8">
+        <div class="w-40 h-15 mx-auto mb-4">
+          <img src="images\mahle_logo_2020-removebg-preview.png" alt="Mahle Logo" class="w-full h-full object-contain" />
+        </div>
+
+        <h1 class="text-2xl font-bold text-gray-800">Choose How You'll Use the System</h1>
+        <p class="text-gray-600 mt-1">Select your role to continue</p>
+      </div>
+      <div class="grid md:grid-cols-2 gap-6">
+        <button id="chooseAuditor" class="card-hover w-full bg-indigo-50 hover:bg-indigo-100 text-primary font-semibold py-6 rounded-xl border border-indigo-200">
+          <div class="flex items-center justify-center space-x-3">
+            <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3M5 11h14M5 19h14M5 15h14"/>
+            </svg>
+            <span>Auditor</span>
+          </div>
+          <p class="text-sm text-gray-600 mt-2">Fill checklists and submit audits</p>
+        </button>
+        <button id="chooseAuditee" class="card-hover w-full bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold py-6 rounded-xl border border-emerald-200">
+          <div class="flex items-center justify-center space-x-3">
+            <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span>Auditee</span>
+          </div>
+          <p class="text-sm text-gray-600 mt-2">View items marked Not Confirmed</p>
+        </button>
+        <!-- LPA Calendar button (add next to Auditor & Auditee) -->
+<button id="chooseLpaCalendar" class="card-hover w-full bg-yellow-50 hover:bg-yellow-100 text-yellow-800 font-semibold py-6 rounded-xl border border-yellow-200">
+  <div class="flex items-center justify-center space-x-3">
+    <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3M3 8h18M5 20h14a2 2 0 002-2V8H3v10a2 2 0 002 2z"/>
+    </svg>
+    <span>LPA Calendar</span>
+  </div>
+  <p class="text-sm text-gray-600 mt-2">View / create the monthly audit schedule</p>
+</button>
+      </div>
+      <p class="text-xs text-gray-500 mt-6 text-center">Tip: Auditee view shows the latest audit submitted in this session</p>
+    </div>
+  </div>
+
+  <!-- Auditor Login Page -->
+  <div id="loginPage" class="hidden min-h-screen flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
+      <div class="text-center mb-8">
+        <button id="backToRoleFromLogin" class="text-primary text-sm underline mb-3">Back to role select</button>
+        <div class="w-40 h-15 mx-auto mb-4">
+          <img src="images\mahle_logo_2020-removebg-preview.png" alt="Mahle Logo" class="w-full h-full object-contain" />
+        </div>
+        <h1 class="text-2xl font-bold text-gray-800 mb-2">Auditor Login</h1>
+        <p class="text-gray-600">Enter your details to start an audit</p>
+      </div>
+      <form id="loginForm" class="space-y-6">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">Employee ID</label>
+          <input id="employeeId" type="text" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent transition" placeholder="Enter your employee ID" required/>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">Management Level</label>
+          <select id="managementLevel" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent transition" required>
+            <option value="">Select your role</option>
+            <option value="team-leader">Team Leader</option>
+            <option value="value-stream-leader">Value Stream Leader</option>
+            <option value="customer-quality-engineer">Customer-quality-engineer</option>
+            <option value="plant-manager">Plant Manager</option>
+            <option value="regional-quality-head">Regional-quality-head</option>
+            <option value="board-member">Board Member</option>
+          </select>
+        </div>
+        <button type="submit" class="w-full bg-primary hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition">Access Audit System</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Auditor Setup Page -->
+  <div id="plantShiftPage" class="hidden min-h-screen flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
+      <div class="text-center mb-8">
+        <button id="backToLoginFromSetup" class="text-primary text-sm underline mb-3">Back</button>
+        <div class="w-40 h-15 mx-auto mb-4">
+          <img src="images\mahle_logo_2020-removebg-preview.png" alt="Mahle Logo" class="w-full h-full object-contain" />
+        </div>
+        <h1 class="text-2xl font-bold text-gray-800 mb-2">Audit Setup</h1>
+        <p class="text-gray-600">Select plant and shift details</p>
+      </div>
+      <form id="plantShiftForm" class="space-y-6">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">Plant Name</label>
+          <select id="plantName" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent transition" required>
+            <option value="">Select plant</option>
+            <option value="Delhi">Delhi</option>
+            <option value="Parwanoo">Parwanoo</option>
+            <option value="Pune">Pune</option>
+            <option value="Chennai">Chennai</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">Value Stream</label>
+          <select id="valueStream" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent transition" required>
+            <option value="">Select value stream</option>
+            <option value="Oil">Oil</option>
+            <option value="Fuel">Fuel</option>
+            <option value="Air">Air</option>
+            <option value="EP & Others">EP & Others</option>
+          </select>
+        </div>
+        <div id="shiftSelection" class="hidden">
+          <label class="block text-sm font-medium text-gray-700 mb-2">Shift Time</label>
+          <select id="shiftTime" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent transition">
+            <option value="">Select shift</option>
+            <option value="Shift A">Shift A </option>
+            <option value="Shift B ">Shift B</option>
+            <option value="Shift C ">Shift C </option>
+            <option value="Shift G ">Shift G</option>
+          </select>
+        </div>
+        <button type="submit" class="w-full bg-primary hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition">Start Audit</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Auditor Dashboard -->
+  <div id="auditDashboard" class="hidden min-h-screen">
+    <header class="bg-white shadow-sm border-b">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex justify-between items-center py-4">
+          <div class="flex items-center">
+            <div class="w-40 h-15 mx-auto mb-4">
+              <img src="images\mahle_logo_2020-removebg-preview.png" alt="Mahle Logo" class="w-full h-full object-contain" />
+            </div>
+            <div>
+              <h1 class="text-xl font-semibold text-gray-800">Layered Process Audit</h1>
+              <p id="userRole" class="text-sm text-gray-600"></p>
+            </div>
+          </div>
+          <div class="flex items-center space-x-4">
+            <div class="text-right">
+              <div id="plantInfo" class="text-sm text-gray-600"></div>
+              <div id="currentDate" class="text-sm text-gray-600"></div>
+            </div>
+            <button id="backToRoleFromDashboard" class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg transition">Back to Role Select</button>
+            <button onclick="logout()" class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg transition">Logout</button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-lg font-semibold text-gray-800">Audit Progress</h2>
+            <p class="text-gray-500 text-sm">Answer every item across all categories</p>
+          </div>
+          <div class="flex items-center space-x-4">
+            <div class="text-sm">
+              <span class="text-gray-600">Completed:</span>
+              <span id="completedCount" class="font-semibold text-success">0</span>
+              <span class="text-gray-600">/ <span id="totalCount">0</span></span>
+            </div>
+            <div class="w-40 bg-gray-200 rounded-full h-2">
+              <div id="progressBar" class="bg-success h-2 rounded-full" style="width:0%"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-xl shadow-sm">
+        <div class="p-4 border-b border-gray-200">
+          <div id="categoryTabs" class="flex flex-wrap gap-2">
+            <!-- Tabs injected -->
+          </div>
+        </div>
+        <div class="p-6">
+          <div id="auditChecklist" class="space-y-4"></div>
+          <div class="mt-8 pt-6 border-t border-gray-200 flex items-center justify-between">
+            <p class="text-sm text-gray-600">All items must be completed before submission</p>
+            <button id="submitAudit" class="bg-success hover:bg-green-600 text-white font-semibold py-3 px-6 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed" disabled>Submit Audit</button>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+  <!-- LPA Calendar Login Page -->
+<div id="lpaLoginPage" class="hidden min-h-screen flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
+    <div class="text-center mb-8">
+      <button id="backToRoleFromLpaLogin" class="text-primary text-sm underline mb-3">Back to role select</button>
+      <div class="w-40 h-15 mx-auto mb-4">
+        <img src="images/mahle_logo_2020-removebg-preview.png" alt="Mahle Logo" class="w-full h-full object-contain" />
+      </div>
+      <h1 class="text-2xl font-bold text-gray-800 mb-2">LPA Calendar Login</h1>
+      <p class="text-gray-600">Enter your User ID and password</p>
+    </div>
+    <form id="lpaLoginForm" class="space-y-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-2">User ID</label>
+        <input id="lpaUserId" type="text" class="w-full px-4 py-3 border border-gray-300 rounded-lg" placeholder="Enter your user ID" required/>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-2">Password</label>
+        <input id="lpaPassword" type="password" class="w-full px-4 py-3 border border-gray-300 rounded-lg" placeholder="Enter your password" required/>
+      </div>
+      <button type="submit" class="w-full bg-primary hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition">Login</button>
+    </form>
+  </div>
+</div>
+<!-- LPA Calendar Main Page (after login) -->
+<div id="lpaMainPage" class="hidden min-h-screen flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-3xl">
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h2 class="text-2xl font-bold text-gray-800">LPA Calendar</h2>
+        <p class="text-gray-600 text-sm">View or create monthly LPA schedules</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <button id="backToRoleFromLpaMain" class="text-primary underline">Back to Role Select</button>
+      </div>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-6">
+      <button id="viewLpaBtn" class="card-hover w-full bg-indigo-50 hover:bg-indigo-100 text-primary font-semibold py-6 rounded-xl border border-indigo-200">
+        <div class="flex items-center justify-center space-x-3">
+          <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3M3 8h18M5 20h14a2 2 0 002-2V8H3v10a2 2 0 002 2z"/></svg>
+          <span>View this month</span>
+        </div>
+        <p class="text-sm text-gray-600 mt-2">See the calendar for the current month</p>
+      </button>
+
+      <button id="createLpaBtn" class="card-hover w-full bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold py-6 rounded-xl border border-emerald-200">
+        <div class="flex items-center justify-center space-x-3">
+          <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+          <span>Create LPA calendar</span>
+        </div>
+        <p class="text-sm text-gray-600 mt-2">Generate a monthly schedule automatically</p>
+      </button>
+    </div>
+
+    <!-- Container where view/create UIs will appear -->
+    <div id="lpaContainer" class="mt-8"></div>
+  </div>
+</div>
+
+
+  <!-- Auditee Category Page -->
+  <div id="auditeeLoginPage" class="hidden min-h-screen flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
+      <div class="text-center mb-6">
+        <button id="backToRoleFromAuditeeLogin" class="text-primary text-sm underline mb-3">Back to role select</button>
+        <div class="w-40 h-15 mx-auto mb-4">
+          <img src="images\mahle_logo_2020-removebg-preview.png" alt="Mahle Logo" class="w-full h-full object-contain" />
+        </div>
+        <h2 class="text-2xl font-bold text-gray-800">Auditee Login</h2>
+        <p class="text-gray-600 text-sm">Enter your User ID and password</p>
+      </div>
+      <form id="auditeeLoginForm" class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">User ID</label>
+          <input id="auditeeUserId" type="text" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent transition" placeholder="Enter your user ID" required/>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">Password</label>
+          <input id="auditeePassword" type="password" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent transition" placeholder="Enter your password" required/>
+        </div>
+        <button type="submit" class="w-full bg-primary hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition">Login</button>
+
+      </form>
+    </div>
+  </div>
+
+  <!-- NEW: Auditee Options Page (View Dashboard / View Non-Compliances) -->
+  <div id="auditeeOptionsPage" class="hidden min-h-screen flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-3xl">
+      <div class="text-center mb-8">
+        <button id="backToRoleFromAuditeeOptions" class="text-primary text-sm underline mb-3">Back to role select</button>
+        <div class="w-40 h-15 mx-auto mb-4">
+          <img src="images\mahle_logo_2020-removebg-preview.png" alt="Mahle Logo" class="w-full h-full object-contain" />
+        </div>
+        <h2 class="text-2xl font-bold text-gray-800">Auditee Options</h2>
+        <p class="text-gray-600 text-sm">Choose what you want to view</p>
+      </div>
+      <div class="grid md:grid-cols-2 gap-6">
+        <button id="viewDashboardBtn" class="card-hover w-full bg-indigo-50 hover:bg-indigo-100 text-primary font-semibold py-6 rounded-xl border border-indigo-200">
+          <div class="flex items-center justify-center space-x-3">
+            <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+            </svg>
+            <span>View Dashboard</span>
+          </div>
+          <p class="text-sm text-gray-600 mt-2">View comprehensive audit analytics and reports</p>
+        </button>
+        <button id="viewNonCompliancesBtn" class="card-hover w-full bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold py-6 rounded-xl border border-emerald-200">
+          <div class="flex items-center justify-center space-x-3">
+            <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+            </svg>
+            <span>View Non-Compliances</span>
+          </div>
+          <p class="text-sm text-gray-600 mt-2">Check items marked as Not Confirmed by category</p>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Auditee Category Page -->
+  <div id="auditeeCategoryPage" class="hidden min-h-screen flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-3xl">
+      <div class="flex items-center justify-between mb-6">
+        <div>
+          <h2 class="text-2xl font-bold text-gray-800">Auditee View</h2>
+          <p class="text-gray-600 text-sm">Select a category to see Not Confirmed items</p>
+        </div>
+        <div class="flex items-center gap-3">
+          <button id="backToOptionsFromCategory" class="text-primary underline">Back to Options</button>
+          <button id="backToRoleFromAuditee" class="text-gray-600 underline">Role Select</button>
+        </div>
+      </div>
+      <div class="grid sm:grid-cols-2 md:grid-cols-3 gap-4">
+        <button class="card-hover p-5 rounded-xl border text-left hover:bg-indigo-50" data-auditee-cat="5S">
+          <div class="font-semibold text-gray-800">5S</div>
+          
+        </button>
+        <button class="card-hover p-5 rounded-xl border text-left hover:bg-indigo-50" data-auditee-cat="Maintenance">
+          <div class="font-semibold text-gray-800">Maintenance</div>
+          
+        </button>
+        <button class="card-hover p-5 rounded-xl border text-left hover:bg-indigo-50" data-auditee-cat="Safety">
+          <div class="font-semibold text-gray-800">Safety</div>
+          
+        </button>
+        <button class="card-hover p-5 rounded-xl border text-left hover:bg-indigo-50" data-auditee-cat="Quality">
+          <div class="font-semibold text-gray-800">Quality</div>
+          
+        </button>
+        <button class="card-hover p-5 rounded-xl border text-left hover:bg-indigo-50" data-auditee-cat="Shop Floor Management">
+          <div class="font-semibold text-gray-800">Shop Floor Management</div> 
+        </button>
+        <button class="card-hover p-5 rounded-xl border text-left hover:bg-indigo-50" data-auditee-cat="Others">
+  <div class="font-semibold text-gray-800">Others</div>
+</button>
+      </div>
+      <div class="mt-6 text-xs text-gray-500">Note: Data shown comes from the latest audit submitted in this session.</div>
+    </div>
+  </div>
+
+  <!-- Auditee Results Page -->
+  <div id="auditeeResultsPage" class="hidden min-h-screen p-4 flex items-center justify-center">
+    <div class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-4xl">
+      <div class="flex items-center justify-between mb-6">
+        <div>
+          <h2 id="auditeeResultsTitle" class="text-2xl font-bold text-gray-800"></h2>
+          <p class="text-gray-600 text-sm">Only Not Confirmed items are listed</p>
+        </div>
+        <div class="flex items-center gap-3">
+          <button id="auditeeBackToCats" class="text-primary underline">Back</button>
+          <button id="auditeeBackToRole" class="text-gray-600 underline">Role Select</button>
+        </div>
+      </div>
+      <div id="auditeeList" class="space-y-4"></div>
+      <div id="auditeeEmpty" class="hidden text-gray-600 text-center p-8 rounded-xl border mt-4">
+        No Not Confirmed items found in this category for the latest audit.
+      </div>
+    </div>
+  </div>
+
+  <!-- Dashboard Page -->
+  <div id="dashboardPage" class="hidden min-h-screen">
+    <!-- Header -->
+    <header class="bg-white shadow-sm border-b border-gray-200">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex justify-between items-center py-4">
+          <div class="flex items-center">
+            <div class="w-40 h-12 mr-6">
+              <div class="w-40 h-15 mx-auto">
+                <img src="images\mahle_logo_2020-removebg-preview.png" alt="Mahle Logo" class="w-full h-full object-contain" />
+              </div>
+            </div>
+            <div>
+              <h1 class="text-2xl font-bold text-gray-900">Layered Process Audit Dashboard</h1>
+              <p class="text-sm text-gray-500 font-medium mt-0.5">Real-time monitoring and analytics</p>
+            </div>
+          </div>
+          <div class="flex items-center space-x-4">
+            <!-- Plant selector -->
+            <div class="text-right">
+              <label for="plantFilter" class="text-xs font-semibold text-gray-600 uppercase tracking-wide">Plant</label>
+              <select id="plantFilter" class="mt-1.5 block border-2 border-gray-200 rounded-lg px-3 py-2 text-sm bg-white font-medium text-gray-700">
+                <option value="all">All Plants</option>
+                <option value="Delhi">Delhi</option>
+                <option value="Parwanoo">Parwanoo</option>
+                <option value="Pune">Pune</option>
+                <option value="Chennai">Chennai</option>
+              </select>
+              <div class="text-xs text-gray-500 mt-2 font-medium">
+                Last updated: <span id="currentTime" class="text-gray-700 font-semibold">Today, 11:42 AM</span>
+              </div>
+            </div>
+            <!-- User avatar -->
+            <div class="avatar-circle">
+              DL
+            </div>
+            <button id="backToRoleFromDashboardMain" class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg transition">Back to Role Select</button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <!-- Top summary cards -->
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8 animate-slide-in">
+        <div class="bg-white rounded-2xl shadow-sm p-6 dashboard-card stat-card border-l-4 border-blue-500">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Total Audits</p>
+              <h3 id="totalAudits" class="metric-value">0</h3>
+            </div>
+            <div class="icon-wrapper bg-blue-100 text-blue-600">
+              <i class="fas fa-file-alt text-2xl"></i>
+            </div>
+          </div>
+        </div>
+
+        <!-- Confirmed Items -->
+        <div class="bg-white rounded-2xl shadow-sm p-6 dashboard-card stat-card border-l-4 border-green-500">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Confirmed Items</p>
+              <h3 id="confirmedPercent" class="metric-value text-green-600">0%</h3>
+              <p id="confirmedChange" class="text-xs text-gray-500 font-medium mt-1"></p>
+            </div>
+            <div class="icon-wrapper bg-green-100 text-green-600">
+              <i class="fas fa-check-circle text-2xl"></i>
+            </div>
+          </div>
+        </div>
+
+        <!-- Not Confirmed Items -->
+        <div class="bg-white rounded-2xl shadow-sm p-6 dashboard-card stat-card border-l-4 border-red-500">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Not Confirmed</p>
+              <h3 id="notConfirmed" class="metric-value text-red-600">0%</h3>
+              <p id="notConfirmedChange" class="text-xs text-gray-500 font-medium mt-1"></p>
+            </div>
+            <div class="icon-wrapper bg-red-100 text-red-600">
+              <i class="fas fa-times-circle text-2xl"></i>
+            </div>
+          </div>
+        </div>
+
+        <!-- Action Points -->
+        <div class="bg-white rounded-2xl shadow-sm p-6 dashboard-card stat-card border-l-4 border-purple-500">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Action Points</p>
+              <h3 id="actionPoints" class="metric-value text-purple-600">0</h3>
+              <p class="text-xs text-gray-600 font-medium mt-2 flex gap-2 flex-wrap">
+                <span class="status-badge status-open">Open: <span id="openSummary">0</span></span>
+                <span class="status-badge status-progress">Progress: <span id="inProgressSummary">0</span></span>
+                <span class="status-badge status-closed">Closed: <span id="closedSummary">0</span></span>
+              </p>
+            </div>
+            <div class="icon-wrapper bg-purple-100 text-purple-600">
+              <i class="fas fa-tasks text-2xl"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Month / Total filter dropdown -->
+      <div class="filter-section flex items-center gap-4">
+        <label for="monthFilter" class="text-sm font-semibold text-gray-700">Time Period:</label>
+        <select id="monthFilter" class="border-2 border-gray-200 rounded-lg px-4 py-2 text-sm bg-white font-medium text-gray-700 flex-1 max-w-xs">
+          <option value="all">All Time</option>
+          <option value="year">This Year (Total)</option>
+          <!-- months will be filled dynamically by script.js -->
+        </select>
+      </div>
+
+      <!-- Charts and Graphs Section -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <!-- Monthly Audit Status Chart -->
+        <div class="bg-white rounded-2xl shadow-sm p-6 dashboard-card">
+          <div class="flex items-center justify-between mb-6">
+            <h3 class="text-xl font-bold text-gray-900">Monthly Audit Status</h3>
+            <div class="flex items-center space-x-2">
+              <span class="legend-item bg-green-100 text-green-800">
+                <span class="w-3 h-3 bg-green-600 rounded-full mr-2"></span>
+                Confirmed
+              </span>
+              <span class="legend-item bg-red-100 text-red-800">
+                <span class="w-3 h-3 bg-red-600 rounded-full mr-2"></span>
+                Not Confirmed
+              </span>
+            </div>
+          </div>
+          <div class="chart-container">
+            <canvas id="monthlyAuditChart" height="300"></canvas>
+          </div>
+        </div>
+        
+        <!-- Non-Conformance by Department -->
+        <div class="bg-white rounded-2xl shadow-sm p-6 dashboard-card">
+          <div class="flex items-center justify-between mb-6">
+            <h3 class="text-xl font-bold text-gray-900">Non-Compliance by Department</h3>
+            <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Not Confirmed Items</div>
+          </div>
+          <div class="chart-container">
+            <canvas id="departmentChart" height="300"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Role-wise Action and Department Details -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <!-- Role-wise Action Status -->
+        <div class="bg-white rounded-2xl shadow-sm p-6 dashboard-card">
+          <h3 class="text-xl font-bold text-gray-900 mb-6">Role-wise Action Status</h3>
+          <div class="space-y-3">
+            <!-- Team Leaders -->
+            <div class="flex items-center justify-between p-4 bg-gradient-to-r from-blue-50 to-blue-100 rounded-xl role-card" data-role="team-leader">
+              <div class="flex items-center">
+                <div class="w-12 h-12 rounded-xl bg-blue-500 flex items-center justify-center text-white mr-4 shadow-md">
+                  <i class="fas fa-user-tie text-lg"></i>
+                </div>
+                <div>
+                  <h4 class="font-bold text-gray-900">Team Leader</h4>
+                  <p class="text-xs text-gray-600 font-medium">Click to view Action Points</p>
+                </div>
+              </div>
+              <div class="text-right">
+                <i class="fas fa-chevron-right text-blue-500"></i>
+              </div>
+            </div>
+            
+            <!-- Value Stream Leaders -->
+            <div class="flex items-center justify-between p-4 bg-gradient-to-r from-green-50 to-green-100 rounded-xl role-card" data-role="value-stream-leader">
+              <div class="flex items-center">
+                <div class="w-12 h-12 rounded-xl bg-green-500 flex items-center justify-center text-white mr-4 shadow-md">
+                  <i class="fas fa-user-graduate text-lg"></i>
+                </div>
+                <div>
+                  <h4 class="font-bold text-gray-900">Value Stream Leader</h4>
+                  <p class="text-xs text-gray-600 font-medium">Click to view Action Points</p>
+                </div>
+              </div>
+              <div class="text-right">
+                <i class="fas fa-chevron-right text-green-500"></i>
+              </div>
+            </div>
+
+            <!-- Quality Engineers -->
+            <div class="flex items-center justify-between p-4 bg-gradient-to-r from-purple-50 to-purple-100 rounded-xl role-card" data-role="customer-quality-engineer">
+              <div class="flex items-center">
+                <div class="w-12 h-12 rounded-xl bg-purple-500 flex items-center justify-center text-white mr-4 shadow-md">
+                  <i class="fas fa-user-cog text-lg"></i>
+                </div>
+                <div>
+                  <h4 class="font-bold text-gray-900">Customer Quality Engineer</h4>
+                  <p class="text-xs text-gray-600 font-medium">Click to view Action Points</p>
+                </div>
+              </div>
+              <div class="text-right">
+                <i class="fas fa-chevron-right text-purple-500"></i>
+              </div>
+            </div>
+            
+            <!-- Plant Managers -->
+            <div class="flex items-center justify-between p-4 bg-gradient-to-r from-yellow-50 to-yellow-100 rounded-xl role-card" data-role="plant-manager">
+              <div class="flex items-center">
+                <div class="w-12 h-12 rounded-xl bg-yellow-500 flex items-center justify-center text-white mr-4 shadow-md">
+                  <i class="fas fa-user-md text-lg"></i>
+                </div>
+                <div>
+                  <h4 class="font-bold text-gray-900">Plant Manager</h4>
+                  <p class="text-xs text-gray-600 font-medium">Click to view Action Points</p>
+                </div>
+              </div>
+              <div class="text-right">
+                <i class="fas fa-chevron-right text-yellow-600"></i>
+              </div>
+            </div>
+
+            <!-- Regional Quality Head -->
+            <div class="flex items-center justify-between p-4 bg-gradient-to-r from-red-50 to-red-100 rounded-xl role-card" data-role="regional-quality-head">
+              <div class="flex items-center">
+                <div class="w-12 h-12 rounded-xl bg-red-500 flex items-center justify-center text-white mr-4 shadow-md">
+                  <i class="fas fa-user-shield text-lg"></i>
+                </div>
+                <div>
+                  <h4 class="font-bold text-gray-900">Regional Quality Head</h4>
+                  <p class="text-xs text-gray-600 font-medium">Click to view Action Points</p>
+                </div>
+              </div>
+              <div class="text-right">
+                <i class="fas fa-chevron-right text-red-500"></i>
+              </div>
+            </div>
+
+            <!-- Board Members -->
+            <div class="flex items-center justify-between p-4 bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl role-card" data-role="board-member">
+              <div class="flex items-center">
+                <div class="w-12 h-12 rounded-xl bg-gray-600 flex items-center justify-center text-white mr-4 shadow-md">
+                  <i class="fas fa-users text-lg"></i>
+                </div>
+                <div>
+                  <h4 class="font-bold text-gray-900">Board Member</h4>
+                  <p class="text-xs text-gray-600 font-medium">Click to view Action Points</p>
+                </div>
+              </div>
+              <div class="text-right">
+                <i class="fas fa-chevron-right text-gray-600"></i>
+              </div>
+            </div>
+          </div>
+        </div>  
+
+        <!-- Department-wise Breakdown -->
+        <div class="bg-white rounded-2xl shadow-sm p-6 dashboard-card">
+          <h3 class="text-xl font-bold text-gray-900 mb-6">Department-wise Breakdown</h3>
+          <div class="space-y-5" id="departmentBreakdown">
+            <!-- JS will insert real data here -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Manager-specific action points area -->
+      <div id="manager-action-points" class="bg-white rounded-2xl shadow-sm overflow-hidden mb-8 dashboard-card" style="display:none;">
+        <div class="px-6 py-5 border-b-2 border-gray-100 bg-gradient-to-r from-blue-50 to-indigo-50">
+          <h3 id="actionPointsTitle" class="text-xl font-bold text-gray-900">Action Points</h3>
+        </div>
+        <div class="p-6">
+          <div class="overflow-x-auto">
+            <table class="min-w-full">
+              <thead>
+                <tr>
+                  <th class="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Date of Assessment</th>
+                  <th class="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Assessment Point</th>
+                  <th class="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Department</th>
+                  <th class="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Comment</th>
+                  <th class="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Action</th>
+                  <th class="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Implementation Date</th>
+                  <th class="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Status</th>
+                </tr>
+              </thead>
+              <tbody id="managerActionBody" class="bg-white divide-y divide-gray-100">
+                <!-- rows inserted by script.js -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer spacing -->
+      <div class="h-20"></div>
+    </main>
+  </div>
+
+  <!-- Comment Modal -->
+  <div id="commentModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-2xl p-8 max-w-md w-full">
+      <div class="text-center mb-6">
+       <div class="w-40 h-15 mx-auto mb-4">
+          <img src="images\mahle_logo_2020-removebg-preview.png" alt="Mahle Logo" class="w-full h-full object-contain" />
+        </div>
+        <h3 class="text-xl font-semibold text-gray-800 mb-2">Remark Required</h3>
+        <p class="text-gray-600">Please provide a reason for marking this item as "Not Confirmed"</p>
+      </div>
+      <div class="mb-6">
+        <label class="block text-sm font-medium text-gray-700 mb-2">Remark</label>
+        <textarea id="commentText" rows="4" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent transition" placeholder="Explain why this item is not confirmed..."></textarea>
+      </div>
+      <div class="flex space-x-4">
+        <button id="cancelCommentBtn" class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded-lg transition">Cancel</button>
+        <button id="saveCommentBtn" class="flex-1 bg-primary hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition">Save Remark</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Success Modal -->
+  <div id="successModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-2xl p-8 max-w-md w-full text-center">
+      <div class="w-40 h-15 mx-auto mb-4">
+          <img src="images\mahle_logo_2020-removebg-preview.png" alt="Mahle Logo" class="w-full h-full object-contain" />
+        </div>
+      <h3 class="text-xl font-semibold text-gray-800 mb-2">Audit Submitted Successfully!</h3>
+      <p class="text-gray-600 mb-6">Your audit has been submitted. Auditees can now view Not Confirmed items.</p>
+      <div class="flex gap-3 justify-center">
+        <button id="startNewAuditBtn" class="bg-primary hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded-lg transition">Start New Audit</button>
+        <button id="auditDoneBtn" class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 px-6 rounded-lg transition">Audit Completed</button>
+      </div>
+    </div>
+  </div>
+  <script src="script.js"></script>
+</body>
+</html>
