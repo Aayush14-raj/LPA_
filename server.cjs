@@ -827,17 +827,16 @@ app.get("/api/download-lpa-excel/:plant/:month/:year", (req, res) => {
 // Serve Frontend + Start Server (FINAL)
 // --------------------------------------------------
 
-
-// Serve static frontend files
+// ---------- Serve Static Frontend (Correct for Render + Local) ----------
 app.use(express.static(path.join(__dirname, "public")));
 
-// SPA fallback (Express v5-safe)
-app.use((req, res) => {
+app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-// Start server
+// ---------- Start Server ----------
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running at http://localhost:${PORT}`);
 });
+
