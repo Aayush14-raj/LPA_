@@ -827,16 +827,24 @@ app.get("/api/download-lpa-excel/:plant/:month/:year", (req, res) => {
 // Serve Frontend + Start Server (FINAL)
 // --------------------------------------------------
 
-// ---------- Serve Static Frontend (Correct for Render + Local) ----------
-app.use(express.static(path.join(__dirname, "public")));
+// ===============================
+// 📌 STATIC FILE SERVING FOR FRONTEND
+// ===============================
+const publicPath = path.join(__dirname, "public");
+app.use(express.static(publicPath));
 
-app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
+// SPA fallback — Express v5 safe (NO "app.get('*')")
+app.use((req, res, next) => {
+  if (req.method === "GET" && !req.path.startsWith("/api/")) {
+    return res.sendFile(path.join(publicPath, "index.html"));
+  }
+  next();
 });
 
-// ---------- Start Server ----------
+// ===============================
+// 🚀 START SERVER
+// ===============================
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`🚀 Server running at http://localhost:${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
 });
-
