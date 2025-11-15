@@ -97,11 +97,11 @@ const auditItems = {
       "Plant floor, machinery, tools, gauges and packing materials (in the checked area) free of dirt, oil, water and grease",
       "Dedicated areas marked/identified and items placed accordingly (e.g. storage of components, semi-finished products, finished products...)"
     ],
-    Safety: [
+    "Safety": [
       "No safety risk observed (e.g. exposed wired, cable crossing walkways, speeding forklift, obstructed eletrical panels) - if risk observed, immediate countermeasure is mandatory.",
       "No objects as pallets, parked forklifts, construction area blocking pathways and forcing pedestrians or vehicles to leave their designated path."
     ],
-    Quality: [
+    "Quality": [
       "Work instructions available for the part produced and easily accessible for the Operators.",
       "Operators training to work at the assigned work place recorded.",
       "Critical process parameters recorded and within the defined limits (verify 5 parameters of one equipment randomly and record the equipment name on the back page)",
@@ -126,21 +126,21 @@ const auditItems = {
     "5S": [
       "Plant floor, machinery, tools, gauges and packing materials (in the checked area) free of dirt, oil, water and grease",
       "Dedicated areas marked/identified and items placed accordingly (e.g. storage of components, semi-finished products, finished products...)",
-      "Cleaning instruction and cleaning plan in place",
+      "Cleaning instruction and cleaning plan in place"
     ],
-    Maintenance: [
+    "Maintenance": [
       "Preventive maintenance defined according to local standard and executed according to the planning",
-      "If TPM implemented, Team maintenance operations defined, executed and recorded (including repair operations)",
+      "If TPM implemented, Team maintenance operations defined, executed and recorded (including repair operations)"
     ],
-    Safety: [
+    "Safety": [
       "Personal protective equipment (PPE) requirements visible to all people (e.g. PPE visualized on each entrance of production and area or line or workstation)",
       "Everyone (internal and external) wears required personal protective equipment (PPE)",
       "No safety risk observed (e.g. exposed wired, cable crossing walkways, speeding forklift, obstructed eletrical panels) - if risk observed, immediate countermeasure is mandatory ",
       "No objects as pallets, parked forklifts, construction area blocking pathways and forcing pedestrians or vehicles to leave their designated path",
       "All chemicals and hazardous materials labeled and stored according to the local HSE standard",
-      "Results of Safety Observation Tours (SOT) have been visualized (F-G-9581 SOT Tracker Form)",
+      "Results of Safety Observation Tours (SOT) have been visualized (F-G-9581 SOT Tracker Form)"
     ],
-    Quality: [
+    "Quality": [
       "Operators informed about customer complaints and recent customer complaints displayed in such a way, that all Operators of the area in which the part is produced, can easily see the complaints",
       "Open customer complaints vizualized and D1 to D6 completed within the given time frame",
       "Work instructions available for the part produced and easily accessible for the Operators",
@@ -151,25 +151,25 @@ const auditItems = {
       "FIFO rules for materials, components, work in process and finished goods, respected within the checked production area (also within rework area and Quality Walls)",
       "All materials (raw material, components, WIP and finish goods) within respective box/pallet identified/labeled according to specification",
       "If Quality Walls exist for the checked line (even if situated in a different area), standard work instruction available and followed by the operator(s) (check one Quality Wall and record the name on the back page)",
-      "If failure detected at Quality Walls, it is documented, recorded and a corrective action is defined",
+      "If failure detected at Quality Walls, it is documented, recorded and a corrective action is defined"
     ],
     "Shop Floor Management": [
       "Communication between shifts documented (e.g. shift hand over book or SFM Board with shift to shift topics or a computer file)",
       "All data required for the KPIs recorded (for example NRFT, breakdowns, changeovers…)  and up to date.",
-      "Result of LPA performed by each level visualized on the SFM Boards (each level check the below level) according to the standard",
+      "Result of LPA performed by each level visualized on the SFM Boards (each level check the below level) according to the standard"
     ],
   },
-  "Regional-Quality-Head": {
+  "regional-quality-head": {
     "5S": [
       "Plant floor, machinery, tools, gauges and packing materials (in the checked area) free of dirt, oil, water and grease",
-      "Dedicated areas marked/identified and items placed accordingly (e.g. storage of components, semi-finished products, finished products...)",
+      "Dedicated areas marked/identified and items placed accordingly (e.g. storage of components, semi-finished products, finished products...)"
     ],
-    "Safety (HSE)": [
+    "Safety": [
       "Everyone (internal and external) wears required personal protective equipment (PPE)",
       "No safety risk observed (e.g. exposed wired, cable crossing walkways, speeding forklift, obstructed eletrical panels) - if risk observed, immediate countermeasure is mandatory.",
-      "No objects as pallets, parked forklifts, construction area blocking pathways and forcing pedestrians or vehicles to leave their designated path.",
+      "No objects as pallets, parked forklifts, construction area blocking pathways and forcing pedestrians or vehicles to leave their designated path."
     ],
-    "Quality Assurance": [
+    "Quality": [
       "Operators informed about customer complaints and recent customer complaints displayed in such a way, that all Operators of the area in which the part is produced, can easily see the complaints.",
       "Open customer complaints vizualized and D1 to D6 completed within the given time frame.",
       "Poka Yoke/detection systems (sensors and cameras) checked at the beginning of each shift and all devices OK",
@@ -177,7 +177,7 @@ const auditItems = {
       "Scrap parts and parts to be reworked separated in boxes/racks clearly identified (for example red/yellow boxes in identified place) to avoid improper use",
       "All materials (raw material, components, WIP and finish goods) within respective box/pallet identified/labeled according to specification.",
       "If Quality Walls exist for the checked line (even if situated in a different area), standard work instruction available and followed by the operator(s)(check one Quality Wall and record the name on the back page)",
-      "If failure detected at Quality Walls, it is documented, recorded and a corrective action is defined.",
+      "If failure detected at Quality Walls, it is documented, recorded and a corrective action is defined."
     ],
     "Shop Floor Management": [
       "All of the identified problems in the action tracker (eg: KPI deviations, 5S deviations, safety issues) have future target dates and responsibilities assigned.",
@@ -686,8 +686,8 @@ async function handleAuditSubmission() {
   }
 
   const mandatoryIds = getAllAuditorItemIds(currentUser.role);
-  let allRequiredAnswered = mandatoryIds.every(id =>
-    auditData[id] && auditData[id].value
+  let allRequiredAnswered = mandatoryIds.every(id => 
+    auditData[id] && auditData[id].value !== undefined
   );
 
   if (!allRequiredAnswered) {
@@ -704,32 +704,32 @@ async function handleAuditSubmission() {
     items: []
   };
 
-  // ✔ Correct status mapping (NO lowercase conversion!)
+  // 🔥 Correct mapping: true → Confirmed, false → Not Confirmed
   for (const id in auditData) {
-    if (auditData[id]?.value) {
-      const status =
-        auditData[id].value === "Confirmed" || auditData[id].value === true
-          ? "Confirmed"
-          : "Not Confirmed";
+    if (auditData[id]?.value !== undefined) {
+
+      const status = auditData[id].value === "confirmed"
+  ? "Confirmed"
+  : "Not Confirmed";
+
 
       payload.items.push({
         category: auditData[id].category || "General",
         question: auditData[id].question || "",
-        status,
+        status: status,
         comment: auditData[id].comment || "",
         is_resolved: false
       });
     }
   }
 
-  console.log("📤 Sending payload to server:", payload);
+  console.log("📤 Sending payload:", payload);
 
   const submitBtn = document.getElementById("submitAudit");
   const originalText = submitBtn.textContent;
   submitBtn.textContent = "Submitting...";
   submitBtn.disabled = true;
 
-  // ========= Retry Logic + Timeout (Fix Render cold start) ========= //
   const maxAttempts = 3;
   const delay = ms => new Promise(res => setTimeout(res, ms));
 
@@ -746,11 +746,10 @@ async function handleAuditSubmission() {
       });
 
       clearTimeout(timeout);
-
       const result = await response.json().catch(() => ({}));
 
       if (response.ok) {
-        console.log("✅ Audit Saved Successfully:", result);
+        console.log("✅ Success:", result);
         const sm = document.getElementById("successModal");
         if (sm) sm.classList.remove("hidden");
         submitBtn.textContent = originalText;
@@ -758,19 +757,19 @@ async function handleAuditSubmission() {
         return;
       }
 
-      console.warn(`⚠️ Attempt ${attempt} failed:`, result);
-
     } catch (err) {
-      console.error(`🚨 Catch Attempt ${attempt}:`, err);
+      console.warn(`Attempt ${attempt} error:`, err);
     }
 
-    await delay(2000); // wait before retry
+    await delay(2000);
   }
 
-  alert("❌ Failed to save audit. Server may be sleeping. Try again.");
+  alert("❌ Failed to save audit. Try again.");
   submitBtn.textContent = originalText;
   submitBtn.disabled = false;
 }
+
+
 
 
 // --- Auditee results rendering ---
