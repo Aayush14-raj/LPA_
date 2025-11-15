@@ -679,8 +679,6 @@ function getAllAuditorItemIds(role) {
   return ids;
 }
 
-// --- Submission ---
-// --- Submission ---
 async function handleAuditSubmission() {
   if (!currentUser || !currentUser.role) {
     alert("⚠️ No active user or role is missing!");
@@ -706,12 +704,18 @@ async function handleAuditSubmission() {
     items: []
   };
 
+  // ✔ Correct status mapping (NO lowercase conversion!)
   for (const id in auditData) {
     if (auditData[id]?.value) {
+      const status =
+        auditData[id].value === "Confirmed" || auditData[id].value === true
+          ? "Confirmed"
+          : "Not Confirmed";
+
       payload.items.push({
         category: auditData[id].category || "General",
         question: auditData[id].question || "",
-        status: auditData[id].value === "Confirmed" ? "Confirmed" : "Not Confirmed",
+        status,
         comment: auditData[id].comment || "",
         is_resolved: false
       });
@@ -725,14 +729,12 @@ async function handleAuditSubmission() {
   submitBtn.textContent = "Submitting...";
   submitBtn.disabled = true;
 
-  let attempts = 0;
+  // ========= Retry Logic + Timeout (Fix Render cold start) ========= //
   const maxAttempts = 3;
   const delay = ms => new Promise(res => setTimeout(res, ms));
 
-  while (attempts < maxAttempts) {
-    attempts++;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      // timeout protection (Render cold-start fix)
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 10000);
 
@@ -748,25 +750,28 @@ async function handleAuditSubmission() {
       const result = await response.json().catch(() => ({}));
 
       if (response.ok) {
-        console.log("✅ Successfully saved:", result);
+        console.log("✅ Audit Saved Successfully:", result);
         const sm = document.getElementById("successModal");
         if (sm) sm.classList.remove("hidden");
+        submitBtn.textContent = originalText;
+        submitBtn.disabled = false;
         return;
       }
 
-      console.error(`⚠️ Attempt ${attempts} failed:`, result);
-      if (attempts < maxAttempts) await delay(2000);
+      console.warn(`⚠️ Attempt ${attempt} failed:`, result);
 
     } catch (err) {
-      console.error(`🚨 Error attempt ${attempts}:`, err);
-      if (attempts < maxAttempts) await delay(2000);
+      console.error(`🚨 Catch Attempt ${attempt}:`, err);
     }
+
+    await delay(2000); // wait before retry
   }
 
-  alert("❌ Failed to save audit. Server might be sleeping. Try again.");
+  alert("❌ Failed to save audit. Server may be sleeping. Try again.");
   submitBtn.textContent = originalText;
   submitBtn.disabled = false;
 }
+
 
 // --- Auditee results rendering ---
 function renderAuditeeItems(items, listHost, emptyHost) {
@@ -849,7 +854,7 @@ function openAuditeeResults(cat) {
   const listHost = document.getElementById("auditeeList");
   const emptyEl = document.getElementById("auditeeEmpty");
 
-  fetch(`${API_BASE}api/getAudits?filterResolved=true`)
+  fetch(`${API_BASE}/api/getAudits?filterResolved=true`)
     .then(res => res.json())
     .then(data => {
       if (!data || !data.audits || data.audits.length === 0) {
