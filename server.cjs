@@ -526,28 +526,7 @@ app.post("/api/saveAction", (req, res) => {
   });
 });
 
-// --------------------------------------------------
-// 🔵 Serve Static FRONTEND Files
-// --------------------------------------------------
-app.use(express.static(path.join(__dirname, "../FRONT END")));
-
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "../FRONT END/index.html"), err => {
-    if (err) {
-      console.error("❌ Error sending index.html:", err);
-      res.status(500).send("Index file not found");
-    }
-  });
-});
-
-app.get("/dashboard", (req, res) => {
-  res.sendFile(path.join(__dirname, "../FRONT END/dashboard.html"), err => {
-    if (err) {
-      console.error("❌ Error sending dashboard.html:", err);
-      res.status(500).send("Dashboard file not found");
-    }
-  });
-});
+// ------------------------------------------------
 
 app.post('/api/lpa-calendar', async (req, res) => {
   try {
@@ -830,10 +809,10 @@ app.get("/api/download-lpa-excel/:plant/:month/:year", (req, res) => {
 // ===============================
 // 📌 STATIC FILE SERVING FOR FRONTEND
 // ===============================
+// Serve frontend from /public (FINAL)
 const publicPath = path.join(__dirname, "public");
 app.use(express.static(publicPath));
 
-// SPA fallback — Express v5 safe (NO "app.get('*')")
 app.use((req, res, next) => {
   if (req.method === "GET" && !req.path.startsWith("/api/")) {
     return res.sendFile(path.join(publicPath, "index.html"));
@@ -841,10 +820,5 @@ app.use((req, res, next) => {
   next();
 });
 
-// ===============================
-// 🚀 START SERVER
-// ===============================
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
