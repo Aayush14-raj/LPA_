@@ -1392,6 +1392,7 @@ function handleExcelUpload(event) {
 
 // 🌿 Create LPA Calendar UI
 document.getElementById("createLpaBtn").addEventListener("click", () => {
+  localStorage.removeItem('uploadedExcelData');
   const container = document.getElementById("lpaContainer");
   const uploadedData = JSON.parse(localStorage.getItem('uploadedExcelData') || '{}');
   const hasExcelData = uploadedData.plant && Object.keys(uploadedData.valueStreams || {}).length > 0;
@@ -1500,6 +1501,9 @@ async function handleLpaCalendarGeneration() {
     const plant = document.getElementById("plantSelect").value;
     if (!plant) return alert("⚠️ Please select a plant first.");
 
+    // ⭐ NEW LINE — prevent old data reuse immediately
+    localStorage.removeItem("latestLpaCalendar");
+
     // ✅ Read uploaded Excel data from localStorage
     const uploadedData = JSON.parse(localStorage.getItem("uploadedExcelData") || "{}");
     // 🚫 DO NOT GENERATE UNTIL EXCEL IS UPLOADED
@@ -1537,6 +1541,15 @@ if (!uploadedData ||
       return alert("⚠️ Please ensure your Excel has Value Stream Configuration filled.");
     }
 
+    // ⭐ NEW LINE — Before generation, ensure first fresh upload only
+    if (!uploadedData.fromFreshUpload) {
+      return alert("⚠️ Please upload Excel again. Old Excel removed!");
+    }
+
+    // ⭐ NEW LINE — Tag data as fresh after upload
+    uploadedData.fromFreshUpload = false;
+    localStorage.setItem("uploadedExcelData", JSON.stringify(uploadedData));
+
     // ✅ Generate LPA Calendar data using your logic
     const data = createLpaCalendarData(plant, vsWithSubs);
     if (!data || !data.assignments || !data.assignments.length) {
@@ -1549,6 +1562,9 @@ if (!uploadedData ||
 
     // ✅ Save locally for debugging
     localStorage.setItem("latestLpaCalendar", JSON.stringify(data));
+
+    // ⭐ NEW LINE — Clear uploaded Excel once used successfully
+    localStorage.removeItem("uploadedExcelData");
 
     // ✅ Render on-screen
     const container = document.getElementById("lpaCalendarDisplay");
