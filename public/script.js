@@ -1446,7 +1446,7 @@ document.getElementById("createLpaBtn").addEventListener("click", () => {
 
   document.getElementById("downloadTemplateBtn").addEventListener("click", downloadLPATemplate);
   document.getElementById("uploadTemplateBtn").addEventListener("change", handleExcelUpload);
-  document.getElementById("downloadPdfBtn").disabled = true;
+  
 
   document.querySelectorAll(".vsCheckbox").forEach(cb => {
     cb.addEventListener("change", (e) => {
