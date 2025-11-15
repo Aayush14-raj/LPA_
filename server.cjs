@@ -70,6 +70,55 @@ if (!fs.existsSync(pdfDir)) fs.mkdirSync(pdfDir, { recursive: true });
 // ==============================
 // ✅ API Routes (all prefixed with /api)
 // ==============================
+// Auto-create tables on startup
+const createTables = async () => {
+  try {
+    await dbPromise.query(`
+      CREATE TABLE IF NOT EXISTS audit_sessions (
+        id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        role VARCHAR(100) NOT NULL,
+        employee_id VARCHAR(50),
+        plant_name VARCHAR(100),
+        value_stream VARCHAR(100),
+        shift_time VARCHAR(50),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    await dbPromise.query(`
+      CREATE TABLE IF NOT EXISTS audit_items (
+        id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        session_id INT NOT NULL,
+        category VARCHAR(100) NOT NULL,
+        question TEXT NOT NULL,
+        status ENUM('Confirmed','Not Confirmed') NOT NULL,
+        comment TEXT,
+        is_resolved TINYINT(1) DEFAULT 0,
+        action_taken TEXT,
+        updated_at DATETIME ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (session_id) REFERENCES audit_sessions(id) ON DELETE CASCADE
+      );
+    `);
+
+    await dbPromise.query(`
+      CREATE TABLE IF NOT EXISTS lpa_calendar (
+        id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        plant VARCHAR(50),
+        month VARCHAR(20),
+        year INT,
+        data_json JSON,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    console.log("📦 Tables checked/created successfully");
+  } catch (err) {
+    console.error("❌ Table creation error:", err.message);
+  }
+};
+
+createTables();
+
 
 // --------------------------------------------------
 // 🔵 Fetch ALL audit sessions with their items
