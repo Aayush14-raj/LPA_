@@ -681,28 +681,22 @@ function getAllAuditorItemIds(role) {
 
 // --- Submission ---
 // --- Submission ---
-function handleAuditSubmission() {
+async function handleAuditSubmission() {
   if (!currentUser || !currentUser.role) {
     alert("⚠️ No active user or role is missing!");
     return;
   }
 
-  // Get mandatory item IDs for this role
   const mandatoryIds = getAllAuditorItemIds(currentUser.role);
-  let allRequiredAnswered = true;
-
-  mandatoryIds.forEach(id => {
-    if (!auditData[id] || !auditData[id].value) {
-      allRequiredAnswered = false;
-    }
-  });
+  let allRequiredAnswered = mandatoryIds.every(id =>
+    auditData[id] && auditData[id].value
+  );
 
   if (!allRequiredAnswered) {
     alert("⚠️ Please answer all mandatory questions before submitting.");
     return;
   }
 
-  // Prepare payload with default empty strings for nullable DB fields
   const payload = {
     role: currentUser.role,
     employee_id: currentUser.employeeId || "",
@@ -712,54 +706,68 @@ function handleAuditSubmission() {
     items: []
   };
 
-  // Populate items
   for (const id in auditData) {
-    if (auditData[id] && auditData[id].value) {
+    if (auditData[id]?.value) {
       payload.items.push({
         category: auditData[id].category || "General",
         question: auditData[id].question || "",
-        status: String(auditData[id].value).toLowerCase() === "confirmed"
-                  ? "Confirmed"
-                  : "Not Confirmed",
+        status: auditData[id].value === "Confirmed" ? "Confirmed" : "Not Confirmed",
         comment: auditData[id].comment || "",
-        is_resolved: false   // 🔥 always false when saving
+        is_resolved: false
       });
     }
   }
 
-  console.log("📤 Sending payload:", payload);
+  console.log("📤 Sending payload to server:", payload);
 
   const submitBtn = document.getElementById("submitAudit");
   const originalText = submitBtn.textContent;
   submitBtn.textContent = "Submitting...";
   submitBtn.disabled = true;
 
-  fetch(`${API_BASE}/api/saveAudit`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
-  })
-    .then(response => response.json().then(data => ({ status: response.status, body: data })))
-    .then(res => {
-      if (res.status === 200 || res.status === 201) {
-        console.log("✅ Audit saved:", res.body);
-        lastSubmission = payload;
+  let attempts = 0;
+  const maxAttempts = 3;
+  const delay = ms => new Promise(res => setTimeout(res, ms));
+
+  while (attempts < maxAttempts) {
+    attempts++;
+    try {
+      // timeout protection (Render cold-start fix)
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000);
+
+      const response = await fetch(`${API_BASE}/api/saveAudit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeout);
+
+      const result = await response.json().catch(() => ({}));
+
+      if (response.ok) {
+        console.log("✅ Successfully saved:", result);
         const sm = document.getElementById("successModal");
         if (sm) sm.classList.remove("hidden");
-      } else {
-        console.error("❌ Failed to save audit:", res.body);
-        alert(`Error saving audit: ${res.body.error || res.body.message || 'Unknown error'}`);
+        return;
       }
-    })
-    .catch(err => {
-      console.error("❌ Error saving audit:", err);
-      alert("Error saving audit to database! Please try again.");
-    })
-    .finally(() => {
-      submitBtn.textContent = originalText;
-      submitBtn.disabled = false;
-    });
+
+      console.error(`⚠️ Attempt ${attempts} failed:`, result);
+      if (attempts < maxAttempts) await delay(2000);
+
+    } catch (err) {
+      console.error(`🚨 Error attempt ${attempts}:`, err);
+      if (attempts < maxAttempts) await delay(2000);
+    }
+  }
+
+  alert("❌ Failed to save audit. Server might be sleeping. Try again.");
+  submitBtn.textContent = originalText;
+  submitBtn.disabled = false;
 }
+
 // --- Auditee results rendering ---
 function renderAuditeeItems(items, listHost, emptyHost) {
   listHost.innerHTML = "";
