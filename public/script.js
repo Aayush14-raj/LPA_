@@ -1393,24 +1393,21 @@ function handleExcelUpload(event) {
 // 🌿 Create LPA Calendar UI
 document.getElementById("createLpaBtn").addEventListener("click", () => {
 
-  
-  
   const container = document.getElementById("lpaContainer");
-  const uploadedData = JSON.parse(localStorage.getItem('uploadedExcelData') || '{}');
-  const hasExcelData = uploadedData.plant && Object.keys(uploadedData.valueStreams || {}).length > 0;
+  localStorage.removeItem("uploadedExcelData"); // ⭐ NEW: reset UI state properly
 
   container.innerHTML = `
     <div class="bg-gray-50 p-6 rounded-xl border mt-6">
       <h3 class="text-xl font-semibold text-gray-800 mb-4">Create LPA Calendar</h3>
 
-      <div class="mb-6 p-4 rounded-lg ${hasExcelData ? 'bg-green-50 border border-green-200' : 'bg-yellow-50 border border-yellow-200'}">
+      <div class="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
         <div class="flex items-center justify-between">
           <div>
-            <h4 class="font-semibold ${hasExcelData ? 'text-green-800' : 'text-yellow-800'}">
-              ${hasExcelData ? '✅ Excel Data Loaded' : '📋 Template Required'}
+            <h4 class="font-semibold text-yellow-800">
+              📋 Template Required
             </h4>
-            <p class="text-sm ${hasExcelData ? 'text-green-600' : 'text-yellow-600'} mt-1">
-              ${hasExcelData ? `Plant: ${uploadedData.plant}` : 'Download and upload template'}
+            <p class="text-sm text-yellow-600 mt-1">
+              Download and upload template to proceed.
             </p>
           </div>
           <div class="flex space-x-2">
@@ -1427,18 +1424,16 @@ document.getElementById("createLpaBtn").addEventListener("click", () => {
       <div class="mb-4">
         <label class="block text-sm font-medium text-gray-700 mb-1">Select Plant</label>
         <select id="plantSelect" class="w-full border rounded-lg px-3 py-2" required>
-          <option value="">-- Select Plant --</option>
-          <option value="Delhi" ${uploadedData.plant === 'Delhi' ? 'selected' : ''}>Delhi</option>
-          <option value="Parwanu" ${uploadedData.plant === 'Parwanu' ? 'selected' : ''}>Parwanu</option>
-          <option value="Pune" ${uploadedData.plant === 'Pune' ? 'selected' : ''}>Pune</option>
-          <option value="Chennai" ${uploadedData.plant === 'Chennai' ? 'selected' : ''}>Chennai</option>
+          <option value="">-- Select Plant --</option> <!-- ⭐ NEW: no auto-selected plant -->
+          <option value="Delhi">Delhi</option>
+          <option value="Parwanu">Parwanu</option>
+          <option value="Pune">Pune</option>
+          <option value="Chennai">Chennai</option>
         </select>
       </div>
       <div class="text-right mt-6">
         <button id="generateLpaBtn" class="bg-primary hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded-lg transition">Generate & Email Calendar</button>
-        <button id="downloadPdfBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded-lg transition mt-2">
-          Download LPA Excel
-        </button>
+        <button id="downloadPdfBtn" disabled class="bg-blue-400 text-white font-semibold py-2 px-6 rounded-lg transition mt-2">Download LPA Excel</button>
       </div>
     </div>
     <div id="lpaCalendarDisplay" class="mt-8"></div>
@@ -1446,7 +1441,6 @@ document.getElementById("createLpaBtn").addEventListener("click", () => {
 
   document.getElementById("downloadTemplateBtn").addEventListener("click", downloadLPATemplate);
   document.getElementById("uploadTemplateBtn").addEventListener("change", handleExcelUpload);
-  
 
   document.querySelectorAll(".vsCheckbox").forEach(cb => {
     cb.addEventListener("change", (e) => {
@@ -1455,46 +1449,37 @@ document.getElementById("createLpaBtn").addEventListener("click", () => {
       if (!e.target.checked) sublineInput.value = 1;
     });
   });
+
   document.getElementById("generateLpaBtn").addEventListener("click", handleLpaCalendarGeneration);
+
   document.getElementById("downloadPdfBtn").addEventListener("click", () => {
     const plant = document.getElementById("plantSelect").value;
     const month = new Date().toLocaleString("default", { month: "long" });
     const year = new Date().getFullYear();
-    window.open(`${API_BASE}/api/download-lpa-excel/${plant}/${month}/${year}`, "_blank");
-
+    window.open(`${API_BASE}/api/download-lpa-excel/${plant}/${month}/${year}`, "_blank"); // ⭐ FIXED URL
   });
 
-  // 🌿 NEW — AUTO-LOAD VALUE STREAMS & SUBLINE NAMES ON PLANT CHANGE
+  // 🌿 NEW — Load Value Stream config only AFTER plant selection
   const plantSelectEl = document.getElementById("plantSelect");
   plantSelectEl.addEventListener("change", () => {
     const plant = plantSelectEl.value;
     if (!plant) return;
 
     const cfg = PLANT_CONFIG[plant];
-    if (!cfg) return;
+    if (!cfg) return alert("⚠ Please upload Excel first.");
 
     const data = JSON.parse(localStorage.getItem("uploadedExcelData") || "{}");
 
-    // Convert REAL names → counts (for old logic compatibility)
     const vsCounts = {};
     Object.entries(cfg).forEach(([vs, arr]) => {
       vsCounts[vs] = Array.isArray(arr) ? arr.length : Number(arr) || 0;
     });
 
     data.plant = plant;
-    data.valueStreams = vsCounts;   // counts used by generation logic
-    data.sublineNames = cfg;        // store real names for createLpaCalendarData
+    data.valueStreams = vsCounts;
+    data.sublineNames = cfg;
 
     localStorage.setItem("uploadedExcelData", JSON.stringify(data));
-
-    const disp = document.getElementById("lpaCalendarDisplay");
-    disp.innerHTML = `
-      <div class="p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm">
-        <b>${plant} Selected</b><br>
-        ${Object.entries(cfg).map(([vs, arr]) => 
-          `<span class="block mt-1">${vs}: ${arr.length} Sub-lines</span>`).join("")}
-      </div>
-    `;
   });
 
 });
@@ -1506,7 +1491,6 @@ async function handleLpaCalendarGeneration() {
     const plant = document.getElementById("plantSelect").value;
     if (!plant) return alert("⚠️ Please select a plant first.");
 
-    // 🔹 Get uploaded Excel data (must exist)
     const uploadedData = JSON.parse(localStorage.getItem("uploadedExcelData") || "{}");
 
     if (!uploadedData ||
@@ -1518,26 +1502,22 @@ async function handleLpaCalendarGeneration() {
         uploadedData.customerQualityEngineers.length === 0 ||
         !uploadedData.plantHODs ||
         uploadedData.plantHODs.length === 0) {
-      return alert("⚠️ Please upload the filled Excel template first.\nVSL, CFT, CQE & PH data are required.");
+      return alert("⚠️ Please upload the filled Excel template first.");
     }
 
-    // 🔹 Ensure value streams exist
     const vsWithSubs = uploadedData.valueStreams || {};
     if (!Object.keys(vsWithSubs).length) {
-      return alert("⚠️ Please ensure your Excel has Value Stream Configuration filled.");
+      return alert("⚠️ Value stream config missing! Select plant again.");
     }
 
-    // 🔹 Generate using your existing function
     const data = createLpaCalendarData(plant, vsWithSubs);
     if (!data || !data.assignments || !data.assignments.length) {
-      return alert("⚠️ No assignments generated. Check Excel.");
+      return alert("⚠️ No assignments generated.");
     }
 
-    // Save for email & download
     data.uploadedData = uploadedData;
     localStorage.setItem("latestLpaCalendar", JSON.stringify(data));
 
-    // Render UI
     const container = document.getElementById("lpaCalendarDisplay");
     container.innerHTML = `
       <div class="mt-4">
@@ -1545,22 +1525,19 @@ async function handleLpaCalendarGeneration() {
       </div>`;
     renderLpaCalendar(data);
 
-    // 📌 Enable download button (NEW)
     const downloadBtn = document.getElementById("downloadPdfBtn");
-    if (downloadBtn) downloadBtn.disabled = false;
+    downloadBtn.disabled = false; // ⭐ Enable only after success
 
     const now = new Date();
     const month = now.toLocaleString("default", { month: "long" });
     const year = now.getFullYear();
 
-    // Save calendar in DB
     await fetch(`${API_BASE}/api/lpa-calendar`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ plant, month, year, data }),
     });
 
-    // Send Email
     const mailResponse = await fetch(`${API_BASE}/api/send-lpa-calendar-mail`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1570,24 +1547,17 @@ async function handleLpaCalendarGeneration() {
     const mailResult = await mailResponse.json();
 
     if (mailResult.success) {
-      alert(`✅ LPA Calendar mailed successfully to:\n${mailResult.sentTo.join(", ")}`);
-
-      // 🔹 Only clear Excel AFTER successful generation (NEW)
+      alert(`🎉 LPA Calendar emailed successfully!`);
       localStorage.removeItem("uploadedExcelData");
-
     } else {
-      alert("⚠️ Calendar generated but email failed. Check server logs.");
+      alert("⚠ Calendar created but email failed.");
     }
 
   } catch (err) {
-    console.error("❌ Error generating LPA Calendar:", err);
-    alert("⚠️ Something went wrong, try again.");
+    console.error("❌ Error generating LPA:", err);
+    alert("⚠ Generation failed.");
   }
 }
-
-
-
-
 // ✅ Local date formatter to avoid timezone shifting
 function formatLocalYMD(date) {
   const y = date.getFullYear();
