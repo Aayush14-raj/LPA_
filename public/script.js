@@ -1160,7 +1160,7 @@ document.querySelectorAll(".role-btn").forEach(btn => {
 });
 
 
-/* -------------------- 🌿 ENHANCED LPA CALENDAR MODULE — FINAL VERSION -------------------- */
+/* -------------------- 🌿 ENHANCED LPA CALENDAR MODULE — FIXED VERSION -------------------- */
 
 // 🌿 Navigation Buttons
 document.getElementById("chooseLpaCalendar").addEventListener("click", () => {
@@ -1176,6 +1176,7 @@ document.getElementById("lpaLoginForm").addEventListener("submit", (e) => {
 document.getElementById("backToRoleFromLpaMain").addEventListener("click", () => {
   showOnly(document.getElementById("roleSelectPage"));
 });
+
 // 🌿 BUILT-IN PLANT CONFIG (Value Streams + Subline Names)
 const PLANT_CONFIG = {
   "Pune": {
@@ -1275,9 +1276,7 @@ function downloadLPATemplate() {
     ["PH3", "", "", ""],
     [""],
 
-       // removed manual value-stream table (prefilled by app per plant)
     ["NOTE", "Value streams are configured in the app (select plant) — do NOT add value streams here."],
-
   ];
 
   const csvContent = templateData
@@ -1312,7 +1311,8 @@ function handleExcelUpload(event) {
         crossFunctionalTeams: [],
         customerQualityEngineers: [],
         plantHODs: [],
-        valueStreams: {}
+        valueStreams: {},
+        sublineNames: {}
       };
 
       const getInitials = (name, excelInitials) => {
@@ -1356,20 +1356,13 @@ function handleExcelUpload(event) {
 
       const phStart = rows.findIndex(r => r[0]?.includes("PLANT HEADS"));
       for (let i = phStart + 2; i < rows.length; i++) {
-        if (!rows[i][0] || rows[i][0].includes("VALUE STREAM")) break;
+        if (!rows[i][0] || rows[i][0].includes("VALUE STREAM") || rows[i][0].includes("NOTE")) break;
         uploadedData.plantHODs.push({
           id: rows[i][0],
           name: rows[i][1],
           initials: getInitials(rows[i][1], rows[i][2]),
           email: rows[i][3]
         });
-      }
-
-      const vsStart = rows.findIndex(r => r[0]?.includes("VALUE STREAM CONFIGURATION"));
-      for (let i = vsStart + 2; i < rows.length; i++) {
-        if (!rows[i][0]) break;
-        const subLines = parseInt(rows[i][1]) || 1;
-        uploadedData.valueStreams[rows[i][0]] = subLines;
       }
 
       localStorage.setItem('uploadedExcelData', JSON.stringify(uploadedData));
@@ -1406,7 +1399,7 @@ document.getElementById("createLpaBtn").addEventListener("click", () => {
             <button type="button" id="downloadTemplateBtn" class="bg-green-600 hover:bg-green-700 text-white text-sm font-medium py-2 px-4 rounded-lg transition">Download Template</button>
             <label class="bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium py-2 px-4 rounded-lg cursor-pointer transition">
               Upload Filled Excel
-              <input type="file" id="uploadTemplateBtn" accept=".csv,xlsx,xls" class="hidden">
+              <input type="file" id="uploadTemplateBtn" accept=".csv,.xlsx,.xls" class="hidden">
             </label>
           </div>
         </div>
@@ -1425,7 +1418,7 @@ document.getElementById("createLpaBtn").addEventListener("click", () => {
       </div>
       <div class="text-right mt-6">
         <button id="generateLpaBtn" class="bg-primary hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded-lg transition">Generate & Email Calendar</button>
-        <button id="downloadPdfBtn" disabled class="bg-blue-400 text-white font-semibold py-2 px-6 rounded-lg transition mt-2">Download LPA Excel</button>
+        <button id="downloadPdfBtn" disabled class="bg-gray-400 text-white font-semibold py-2 px-6 rounded-lg transition mt-2 cursor-not-allowed">Download LPA Excel</button>
       </div>
     </div>
     <div id="lpaCalendarDisplay" class="mt-8"></div>
@@ -1450,12 +1443,31 @@ document.getElementById("createLpaBtn").addEventListener("click", () => {
 
     const data = JSON.parse(localStorage.getItem("uploadedExcelData") || "{}");
 
-    if (!data.valueStreamLeaders) {
-      return alert("⚠ Upload Excel first");
+    if (!data.valueStreamLeaders || data.valueStreamLeaders.length === 0) {
+      alert("⚠ Upload Excel first");
+      plantSelectEl.value = "";
+      return;
     }
 
-    data.plant = plant;
-    localStorage.setItem("uploadedExcelData", JSON.stringify(data));
+    // ✅ FIX: Populate value streams and subline names from PLANT_CONFIG
+    const plantConfig = PLANT_CONFIG[plant];
+    if (plantConfig) {
+      data.plant = plant;
+      data.valueStreams = {};
+      data.sublineNames = {};
+
+      Object.keys(plantConfig).forEach(vs => {
+        const sublines = plantConfig[vs];
+        data.valueStreams[vs] = sublines.length;
+        data.sublineNames[vs] = sublines;
+      });
+
+      localStorage.setItem("uploadedExcelData", JSON.stringify(data));
+      console.log("✅ Plant data populated:", data);
+    } else {
+      alert("⚠ Plant configuration not found");
+      plantSelectEl.value = "";
+    }
   });
 
 });
@@ -1465,17 +1477,36 @@ document.getElementById("createLpaBtn").addEventListener("click", () => {
 async function handleLpaCalendarGeneration() {
   try {
     const plant = document.getElementById("plantSelect").value;
-    if (!plant) return alert("⚠️ Select plant first.");
+    if (!plant) {
+      alert("⚠️ Select plant first.");
+      return;
+    }
 
     const uploadedData = JSON.parse(localStorage.getItem("uploadedExcelData") || "{}");
 
-    if (!uploadedData.valueStreamLeaders) return alert("⚠️ Upload Excel first");
+    if (!uploadedData.valueStreamLeaders || uploadedData.valueStreamLeaders.length === 0) {
+      alert("⚠️ Upload Excel first");
+      return;
+    }
+
+    if (uploadedData.plant !== plant) {
+      alert("⚠️ Please re-select the plant after uploading Excel");
+      return;
+    }
 
     const vsWithSubs = uploadedData.valueStreams || {};
-    if (!Object.keys(vsWithSubs).length) return alert("⚠️ Select plant again.");
+    if (!Object.keys(vsWithSubs).length) {
+      alert("⚠️ No value streams found. Please re-select plant.");
+      return;
+    }
+
+    console.log("📊 Generating calendar with data:", { plant, vsWithSubs, uploadedData });
 
     const data = createLpaCalendarData(plant, vsWithSubs);
-    if (!data.assignments?.length) return alert("⚠️ Calendar failed to generate");
+    if (!data.assignments || data.assignments.length === 0) {
+      alert("⚠️ Calendar failed to generate");
+      return;
+    }
 
     data.uploadedData = uploadedData;
     localStorage.setItem("latestLpaCalendar", JSON.stringify(data));
@@ -1489,31 +1520,38 @@ async function handleLpaCalendarGeneration() {
 
     const downloadBtn = document.getElementById("downloadPdfBtn");
     downloadBtn.disabled = false;
+    downloadBtn.classList.remove("bg-gray-400", "cursor-not-allowed");
+    downloadBtn.classList.add("bg-blue-600", "hover:bg-blue-700", "cursor-pointer");
 
     const now = new Date();
     const month = now.toLocaleString("default", { month: "long" });
     const year = now.getFullYear();
 
-    await fetch(`${API_BASE}/api/lpa-calendar`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ plant, month, year, data }),
-    });
+    // Send to backend (optional, based on your API_BASE setup)
+    try {
+      await fetch(`${API_BASE}/api/lpa-calendar`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plant, month, year, data }),
+      });
 
-    await fetch(`${API_BASE}/api/send-lpa-calendar-mail`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ plant, month, year, data }),
-    });
+      await fetch(`${API_BASE}/api/send-lpa-calendar-mail`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plant, month, year, data }),
+      });
+    } catch (apiError) {
+      console.warn("⚠ Backend API error (calendar still generated locally):", apiError);
+    }
 
     alert("🎉 Calendar created successfully!");
-    localStorage.removeItem("uploadedExcelData");
 
   } catch (err) {
-    console.error("⚠ Backend error, but UI calendar shown.");
-    alert("📌 Calendar created. Email & Download may take a moment.");
+    console.error("⚠ Error during calendar generation:", err);
+    alert("❌ An error occurred. Please check console for details.");
   }
 }
+
 // ✅ Local date formatter to avoid timezone shifting
 function formatLocalYMD(date) {
   const y = date.getFullYear();
@@ -1539,8 +1577,7 @@ function createLpaCalendarData(plant, vsWithSubs) {
   const phList = uploadedData.plantHODs || [];
 
   const isSunday = (date) => date.getDay() === 0;
-  const getInterval = (type) =>
-    type === "twiceWeek" ? 3 : 15;
+  const getInterval = (type) => type === "twiceWeek" ? 3 : 15;
 
   const dates = Array.from({ length: daysInMonth }, (_, i) => new Date(year, month, i + 1));
 
@@ -1567,7 +1604,7 @@ function createLpaCalendarData(plant, vsWithSubs) {
   // -----------------------------
   if (vslList.length > 0 && allSubLines.length > 0) {
 
-    // 🔹 Case 1: ONLY ONE VSL → global rotation across ALL lines (what was working for you)
+    // 🔹 Case 1: ONLY ONE VSL → global rotation across ALL lines
     if (vslList.length === 1) {
       const vsl = vslList[0];
       const vslInitial = vsl.initials || vsl.name || "VSL";
@@ -1717,7 +1754,7 @@ function createLpaCalendarData(plant, vsWithSubs) {
   }
 
   // -----------------------------
-  // 3️⃣ CQE LOGIC — Twice a Week (same as before)
+  // 3️⃣ CQE LOGIC — Twice a Week
   // -----------------------------
   const cqeInterval = getInterval("twiceWeek");
   const cqeAllSubLines = Object.values(mainLines).flat();
@@ -1732,7 +1769,7 @@ function createLpaCalendarData(plant, vsWithSubs) {
       const date1 = new Date(year, month, d + 1);
       const date2 = new Date(year, month, d + 4);
 
-      if (!isSunday(date1)) {
+      if (!isSunday(date1) && date1.getMonth() === month) {
         assignments.push({
           plant,
           date: formatLocalYMD(date1),
@@ -1742,7 +1779,7 @@ function createLpaCalendarData(plant, vsWithSubs) {
         });
       }
 
-      if (!isSunday(date2)) {
+      if (!isSunday(date2) && date2.getMonth() === month) {
         assignments.push({
           plant,
           date: formatLocalYMD(date2),
@@ -1755,7 +1792,7 @@ function createLpaCalendarData(plant, vsWithSubs) {
   });
 
   // -----------------------------
-  // 4️⃣ PLANT HEAD LOGIC — Twice a Month (same as before)
+  // 4️⃣ PLANT HEAD LOGIC — Twice a Month
   // -----------------------------
   phList.forEach((ph, i) => {
     const initials = ph.initials?.trim() || ph.name || `PH${i + 1}`;
@@ -1810,19 +1847,11 @@ function renderLpaCalendar(data) {
   // 🧩 Get all unique lines
   const allLines = [...new Set(assignments.map(a => a.line))].sort();
 
-  // 🌿 Identify Value Streams (for header info)
-  const valueStreams = {};
-  allLines.forEach(line => {
-    const vs = line.split(" ")[0]; // e.g. "Air Line 1" → "Air"
-    valueStreams[vs] = true;
-  });
-
   // 🏗️ Header
   let html = `
     <div class="bg-white rounded-lg border shadow-md">
       <div class="p-4 border-b bg-gray-50">
         <h3 class="text-xl font-semibold text-gray-800">${month} — ${plant} Plant</h3>
-        
       </div>
       
       <div class="lpa-scroll-container overflow-x-auto">
@@ -1844,93 +1873,93 @@ function renderLpaCalendar(data) {
 
   html += `</tr></thead><tbody>`;
 
- // 🆕 GROUP LINES BY VALUE STREAM USING REAL SUBLINE NAMES
-const uploadedData = JSON.parse(localStorage.getItem("uploadedExcelData") || "{}");
-const groupedLines = {};
+  // 🆕 GROUP LINES BY VALUE STREAM USING REAL SUBLINE NAMES
+  const uploadedData = JSON.parse(localStorage.getItem("uploadedExcelData") || "{}");
+  const groupedLines = {};
 
-allLines.forEach(line => {
-  const matchedVS = Object.keys(uploadedData.sublineNames || {}).find(vs =>
-    uploadedData.sublineNames[vs].includes(line)
-  ) || "Other";
+  allLines.forEach(line => {
+    const matchedVS = Object.keys(uploadedData.sublineNames || {}).find(vs =>
+      uploadedData.sublineNames[vs].includes(line)
+    ) || "Other";
 
-  if (!groupedLines[matchedVS]) groupedLines[matchedVS] = [];
-  groupedLines[matchedVS].push(line);
-});
-
-// 🆕 RENDER GROUPED VALUE STREAMS
-Object.entries(groupedLines).forEach(([vs, lines]) => {
-
-  // Value Stream header row
-  html += `
-    <tr class="bg-gray-200">
-      <td class="border p-3 font-bold text-gray-800 sticky left-0 z-10">${vs}</td>
-      ${dates.map(() => `<td class="border p-2 bg-gray-200"></td>`).join("")}
-    </tr>
-  `;
-
-  // Render each subline under this VS
-  lines.forEach(line => {
-    html += `
-      <tr class="hover:bg-gray-50 transition-colors">
-        <td class="border p-3 font-medium bg-gray-50 sticky left-0 z-10">${line}</td>
-    `;
-
-    dates.forEach(date => {
-      const dateStr = date.toISOString().split("T")[0];
-      const cellData = assignments.filter(a => a.date === dateStr && a.line === line);
-
-      if (cellData.some(a => a.type === "Holiday")) {
-        html += `<td class="border p-2 text-center bg-gray-200 text-gray-600 font-semibold">Holiday</td>`;
-        return;
-      }
-
-      if (cellData.length > 0) {
-        const colorMap = {
-          "Value Stream Leader": "bg-green-100 text-green-800 border-green-300",
-          "CFT Member": "bg-purple-100 text-purple-800 border-purple-300",
-          "Customer Quality Engineer": "bg-blue-100 text-blue-800 border-blue-300",
-          "Plant Head": "bg-orange-100 text-orange-800 border-orange-300",
-        };
-
-        html += `<td class="border p-1 text-center">`;
-        cellData.forEach(a => {
-          const colorClass = colorMap[a.type] || "bg-gray-100 text-gray-800 border-gray-300";
-          html += `
-            <div class="${colorClass} border rounded px-1 py-0.5 text-[11px] font-medium m-0.5">
-              ${a.manager}
-            </div>
-          `;
-        });
-        html += `</td>`;
-      } else {
-        html += `<td class="border p-2 text-center text-gray-300">–</td>`;
-      }
-    });
-
-    html += `</tr>`;
+    if (!groupedLines[matchedVS]) groupedLines[matchedVS] = [];
+    groupedLines[matchedVS].push(line);
   });
 
-});
+  // 🆕 RENDER GROUPED VALUE STREAMS
+  Object.entries(groupedLines).forEach(([vs, lines]) => {
 
-html += `
-      </tbody>
-    </table>
-  </div>
-  </div>
+    // Value Stream header row
+    html += `
+      <tr class="bg-gray-200">
+        <td class="border p-3 font-bold text-gray-800 sticky left-0 z-10 bg-gray-200">${vs}</td>
+        ${dates.map(() => `<td class="border p-2 bg-gray-200"></td>`).join("")}
+      </tr>
+    `;
+
+    // Render each subline under this VS
+    lines.forEach(line => {
+      html += `
+        <tr class="hover:bg-gray-50 transition-colors">
+          <td class="border p-3 font-medium bg-gray-50 sticky left-0 z-10">${line}</td>
+      `;
+
+      dates.forEach(date => {
+        const dateStr = date.toISOString().split("T")[0];
+        const cellData = assignments.filter(a => a.date === dateStr && a.line === line);
+
+        if (cellData.some(a => a.type === "Holiday")) {
+          html += `<td class="border p-2 text-center bg-gray-200 text-gray-600 font-semibold">Holiday</td>`;
+          return;
+        }
+
+        if (cellData.length > 0) {
+          const colorMap = {
+            "Value Stream Leader": "bg-green-100 text-green-800 border-green-300",
+            "CFT Member": "bg-purple-100 text-purple-800 border-purple-300",
+            "Customer Quality Engineer": "bg-blue-100 text-blue-800 border-blue-300",
+            "Plant Head": "bg-orange-100 text-orange-800 border-orange-300",
+          };
+
+          html += `<td class="border p-1 text-center">`;
+          cellData.forEach(a => {
+            const colorClass = colorMap[a.type] || "bg-gray-100 text-gray-800 border-gray-300";
+            html += `
+              <div class="${colorClass} border rounded px-1 py-0.5 text-[11px] font-medium m-0.5">
+                ${a.manager}
+              </div>
+            `;
+          });
+          html += `</td>`;
+        } else {
+          html += `<td class="border p-2 text-center text-gray-300">–</td>`;
+        }
+      });
+
+      html += `</tr>`;
+    });
+
+  });
+
+  html += `
+        </tbody>
+      </table>
+    </div>
+    </div>
   `;
 
-// 🗂️ Legend (for clarity)
-html += `
-  <div class="mt-4 flex flex-wrap gap-4 text-xs text-gray-700">
-    <div class="flex items-center"><div class="w-3 h-3 bg-green-100 border border-green-300 rounded mr-2"></div>Value Stream Leader</div>
-    <div class="flex items-center"><div class="w-3 h-3 bg-purple-100 border border-purple-300 rounded mr-2"></div>CFT Member</div>
-    <div class="flex items-center"><div class="w-3 h-3 bg-blue-100 border border-blue-300 rounded mr-2"></div>Customer Quality Engineer</div>
-    <div class="flex items-center"><div class="w-3 h-3 bg-orange-100 border border-orange-300 rounded mr-2"></div>Plant Head</div>
-  </div>
-`;
+  // 🗂️ Legend (for clarity)
+  html += `
+    <div class="mt-4 flex flex-wrap gap-4 text-xs text-gray-700">
+      <div class="flex items-center"><div class="w-3 h-3 bg-green-100 border border-green-300 rounded mr-2"></div>Value Stream Leader</div>
+      <div class="flex items-center"><div class="w-3 h-3 bg-purple-100 border border-purple-300 rounded mr-2"></div>CFT Member</div>
+      <div class="flex items-center"><div class="w-3 h-3 bg-blue-100 border border-blue-300 rounded mr-2"></div>Customer Quality Engineer</div>
+      <div class="flex items-center"><div class="w-3 h-3 bg-orange-100 border border-orange-300 rounded mr-2"></div>Plant Head</div>
+    </div>
+  `;
 
-// 🧩 Render to DOM
-container.innerHTML = html;
+  // 🧩 Render to DOM
+  container.innerHTML = html;
 }
 /* -------------------- DASHBOARD FUNCTIONALITY -------------------- */
 

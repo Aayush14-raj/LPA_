@@ -585,6 +585,10 @@ app.post("/api/saveAction", (req, res) => {
 
 // ------------------------------------------------
 
+// ============================================================
+// 📊 LPA CALENDAR API ENDPOINTS — CORRECTED VERSION
+// ============================================================
+
 app.post('/api/lpa-calendar', async (req, res) => {
   try {
     const { plant, month, year, data } = req.body;
@@ -614,11 +618,6 @@ app.get('/api/lpa-calendar', async (req, res) => {
   }
 });
 
-// --------------------------------------------------
-// 🔵 Send LPA Calendar Emails
-// --------------------------------------------------
-
-
 // ============================================================
 // 📧 API: Send LPA Calendar Email with PROPER Calendar Excel
 // ============================================================
@@ -643,14 +642,14 @@ app.post("/api/send-lpa-calendar-mail", async (req, res) => {
     // ============================================================
     const safePlant = (plant || "Plant").replace(/\s+/g, "_");
     const fileName = `LPA_Calendar_${safePlant}_${month}_${year}.xlsx`;
-    const excelPath = path.join("/tmp", fileName); // Render-safe storage
-
+    const excelPath = path.join("/tmp", fileName);
 
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet(`${month} ${year}`);
 
     const assignments = data?.assignments || [];
-    const daysInMonth = new Date(year, new Date(`${month} 1, ${year}`).getMonth() + 1, 0).getDate();
+    const monthIndex = new Date(`${month} 1, ${year}`).getMonth();
+    const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
 
     // ============================================================
     // 🟦 HEADER LAYOUT (Row1 = Month, Row2 = Dates, Row3 = Day Names)
@@ -661,11 +660,11 @@ app.post("/api/send-lpa-calendar-mail", async (req, res) => {
     // Row 1 — Big merged Month Name
     sheet.mergeCells(`A1:${lastColLetter}1`);
     const titleCell = sheet.getCell("A1");
-    titleCell.value = `${month.toUpperCase()} ${year}`;
+    titleCell.value = `${month.toUpperCase()} ${year} - ${plant}`;
     titleCell.font = { size: 18, bold: true, color: { argb: "FFFFFFFF" } };
     titleCell.alignment = { horizontal: "center", vertical: "middle" };
     titleCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0077B6" } };
-    sheet.getRow(1).height = 30;
+    sheet.getRow(1).height = 35;
 
     // Row 2 — Date Numbers
     const dateRow = sheet.getRow(2);
@@ -678,7 +677,7 @@ app.post("/api/send-lpa-calendar-mail", async (req, res) => {
     const dayRow = sheet.getRow(3);
     dayRow.getCell(1).value = "";
     for (let d = 1; d <= daysInMonth; d++) {
-      const date = new Date(`${month} ${d}, ${year}`);
+      const date = new Date(year, monthIndex, d);
       const dayName = date.toLocaleDateString("en", { weekday: "short" });
       dayRow.getCell(d + 1).value = dayName;
     }
@@ -686,9 +685,10 @@ app.post("/api/send-lpa-calendar-mail", async (req, res) => {
     // Style for header rows
     [2, 3].forEach((r) => {
       const row = sheet.getRow(r);
+      row.height = 22;
       row.eachCell((cell, col) => {
         cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
-        cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
+        cell.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 11 };
         cell.fill = {
           type: "pattern",
           pattern: "solid",
@@ -705,18 +705,30 @@ app.post("/api/send-lpa-calendar-mail", async (req, res) => {
 
     // Make Sunday columns red in header
     for (let d = 1; d <= daysInMonth; d++) {
-      const date = new Date(`${month} ${d}, ${year}`);
-      const dayName = date.toLocaleDateString("en", { weekday: "short" });
-      if (dayName === "Sun") {
+      const date = new Date(year, monthIndex, d);
+      if (date.getDay() === 0) { // Sunday
         dateRow.getCell(d + 1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFF4D4D" } };
         dayRow.getCell(d + 1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFF4D4D" } };
       }
     }
 
     // ============================================================
-    // 📅 Fill Calendar Rows (Lines × Days)
+    // 📅 Fill Calendar Rows (Lines × Days) with Value Stream Grouping
     // ============================================================
     const allLines = [...new Set(assignments.map((a) => a.line))].sort();
+    
+    // Group lines by value stream
+    const sublineNames = uploadedData.sublineNames || {};
+    const groupedLines = {};
+    
+    allLines.forEach(line => {
+      const matchedVS = Object.keys(sublineNames).find(vs =>
+        sublineNames[vs].includes(line)
+      ) || "Other";
+      
+      if (!groupedLines[matchedVS]) groupedLines[matchedVS] = [];
+      groupedLines[matchedVS].push(line);
+    });
 
     const roleColors = {
       "Value Stream Leader": "FFB7E4C7", // green
@@ -727,44 +739,79 @@ app.post("/api/send-lpa-calendar-mail", async (req, res) => {
 
     const sundayFill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFCCCC" } };
 
-    allLines.forEach((line, i) => {
-      const row = sheet.getRow(i + 4); // start from row 4
-      row.getCell(1).value = line;
-      row.getCell(1).font = { bold: true };
-      row.height = 20;
+    let currentRow = 4;
 
+    // Render grouped value streams
+    Object.entries(groupedLines).forEach(([vs, lines]) => {
+      // Value Stream Header Row
+      const vsRow = sheet.getRow(currentRow);
+      vsRow.getCell(1).value = vs;
+      vsRow.getCell(1).font = { bold: true, size: 12, color: { argb: "FFFFFFFF" } };
+      vsRow.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF4A4A4A" } };
+      vsRow.getCell(1).alignment = { horizontal: "left", vertical: "middle" };
+      vsRow.height = 25;
+
+      // Fill rest of VS header row
       for (let d = 1; d <= daysInMonth; d++) {
-        const date = new Date(`${month} ${d}, ${year}`);
-        const dayName = date.toLocaleDateString("en", { weekday: "short" });
-        const dateStr = `${year}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-        const cell = row.getCell(d + 1);
-        cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
-
-        if (dayName === "Sun") {
-          cell.value = "Holiday";
-          cell.fill = sundayFill;
-          cell.font = { color: { argb: "FFB00020" }, bold: true, italic: true };
-          continue;
-        }
-
-        const found = assignments.filter((a) => a.date === dateStr && a.line === line);
-        if (found.length > 0) {
-          const auditor = found.map((a) => a.manager).join(", ");
-          const type = found[0].type;
-          const color = roleColors[type] || "FFFFFFFF";
-          cell.value = auditor;
-          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: color } };
-        }
+        const cell = vsRow.getCell(d + 1);
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE0E0E0" } };
       }
 
-      // Borders for all data cells
-      row.eachCell((cell) => {
+      // Add borders to VS header
+      vsRow.eachCell((cell) => {
         cell.border = {
-          top: { style: "thin", color: { argb: "FFDDDDDD" } },
+          top: { style: "medium", color: { argb: "FF000000" } },
           left: { style: "thin", color: { argb: "FFDDDDDD" } },
-          bottom: { style: "thin", color: { argb: "FFDDDDDD" } },
+          bottom: { style: "medium", color: { argb: "FF000000" } },
           right: { style: "thin", color: { argb: "FFDDDDDD" } },
         };
+      });
+
+      currentRow++;
+
+      // Render each line under this value stream
+      lines.forEach((line) => {
+        const row = sheet.getRow(currentRow);
+        row.getCell(1).value = line;
+        row.getCell(1).font = { bold: true, size: 10 };
+        row.getCell(1).alignment = { horizontal: "left", vertical: "middle", indent: 1 };
+        row.height = 22;
+
+        for (let d = 1; d <= daysInMonth; d++) {
+          const date = new Date(year, monthIndex, d);
+          const dateStr = `${year}-${String(monthIndex + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+          const cell = row.getCell(d + 1);
+          cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+          cell.font = { size: 9 };
+
+          if (date.getDay() === 0) { // Sunday
+            cell.value = "Holiday";
+            cell.fill = sundayFill;
+            cell.font = { color: { argb: "FFB00020" }, bold: true, italic: true, size: 9 };
+          } else {
+            const found = assignments.filter((a) => a.date === dateStr && a.line === line);
+            if (found.length > 0) {
+              const auditor = found.map((a) => a.manager).join(", ");
+              const type = found[0].type;
+              const color = roleColors[type] || "FFFFFFFF";
+              cell.value = auditor;
+              cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: color } };
+              cell.font = { size: 9, bold: true };
+            }
+          }
+        }
+
+        // Borders for all data cells
+        row.eachCell((cell) => {
+          cell.border = {
+            top: { style: "thin", color: { argb: "FFDDDDDD" } },
+            left: { style: "thin", color: { argb: "FFDDDDDD" } },
+            bottom: { style: "thin", color: { argb: "FFDDDDDD" } },
+            right: { style: "thin", color: { argb: "FFDDDDDD" } },
+          };
+        });
+
+        currentRow++;
       });
     });
 
@@ -774,21 +821,39 @@ app.post("/api/send-lpa-calendar-mail", async (req, res) => {
     sheet.views = [{ state: "frozen", xSplit: 1, ySplit: 3 }];
 
     // Set widths
-    sheet.getColumn(1).width = 28;
-    for (let i = 2; i <= totalCols; i++) sheet.getColumn(i).width = 10;
+    sheet.getColumn(1).width = 32;
+    for (let i = 2; i <= totalCols; i++) sheet.getColumn(i).width = 11;
 
     // ============================================================
     // 🗂️ Add Legend at bottom
     // ============================================================
-    const legendStart = allLines.length + 6;
-    sheet.getRow(legendStart).values = ["Legend:"];
-    sheet.getRow(legendStart + 1).values = [
-      "🟩 Value Stream Leader",
-      "🟪 CFT Member",
-      "🟦 Customer Quality Engineer",
-      "🟧 Plant Head",
-      "🟥 Sunday - Holiday",
+    const legendStart = currentRow + 2;
+    const legendRow1 = sheet.getRow(legendStart);
+    legendRow1.getCell(1).value = "LEGEND:";
+    legendRow1.getCell(1).font = { bold: true, size: 12 };
+    legendRow1.height = 20;
+
+    const legendItems = [
+      { text: "Value Stream Leader", color: "FFB7E4C7" },
+      { text: "CFT Member", color: "FFE2C2FF" },
+      { text: "Customer Quality Engineer", color: "FFB3D9FF" },
+      { text: "Plant Head", color: "FFFFCC99" },
+      { text: "Sunday - Holiday", color: "FFFFCCCC" },
     ];
+
+    legendItems.forEach((item, i) => {
+      const row = sheet.getRow(legendStart + i + 1);
+      row.getCell(1).value = item.text;
+      row.getCell(1).font = { size: 10 };
+      row.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: item.color } };
+      row.getCell(1).border = {
+        top: { style: "thin" },
+        left: { style: "thin" },
+        bottom: { style: "thin" },
+        right: { style: "thin" },
+      };
+      row.height = 18;
+    });
 
     // Save Excel file
     await workbook.xlsx.writeFile(excelPath);
@@ -810,18 +875,35 @@ app.post("/api/send-lpa-calendar-mail", async (req, res) => {
       to: [...emails],
       subject: `LPA Calendar – ${plant} (${month} ${year})`,
       html: `
-        <p>Dear Team,</p>
-        <p>Your <b>LPA Calendar</b> for <b>${plant}</b> (${month} ${year}) has been generated successfully.</p>
-        <p>Attached is the calendar in Excel format.</p>
-        <p>🗓️ <b>Features:</b> Month header, day numbers, weekday labels, Sundays marked as Holiday.</p>
-        <p><b>Color Key:</b> 🟩 VSL, 🟪 CFT, 🟦 CQE, 🟧 PH, 🟥 Sunday</p>
-        <br><p>Regards,<br><b>LPA System</b></p>
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #0077B6;">LPA Calendar Generated</h2>
+          <p>Dear Team,</p>
+          <p>Your <b>LPA Calendar</b> for <b>${plant}</b> (${month} ${year}) has been generated successfully.</p>
+          <p>📎 The calendar is attached in Excel format with the following features:</p>
+          <ul>
+            <li>Month header with plant name</li>
+            <li>Date numbers and weekday labels</li>
+            <li>Sundays marked as Holiday</li>
+            <li>Color-coded auditor assignments</li>
+            <li>Grouped by Value Streams</li>
+          </ul>
+          <p><b>Color Legend:</b></p>
+          <ul style="list-style: none; padding: 0;">
+            <li>🟩 Value Stream Leader</li>
+            <li>🟪 CFT Member</li>
+            <li>🟦 Customer Quality Engineer</li>
+            <li>🟧 Plant Head</li>
+            <li>🟥 Sunday - Holiday</li>
+          </ul>
+          <br>
+          <p>Best regards,<br><b>LPA Calendar System</b></p>
+        </div>
       `,
       attachments: [{ filename: fileName, path: excelPath }],
     };
 
     await transporter.sendMail(mailOptions);
-    console.log(`📧 Sent Excel to: ${[...emails].join(", ")}`);
+    console.log(`📧 Email sent successfully to: ${[...emails].join(", ")}`);
 
     res.json({ success: true, file: fileName, sentTo: [...emails] });
   } catch (err) {
@@ -830,13 +912,15 @@ app.post("/api/send-lpa-calendar-mail", async (req, res) => {
   }
 });
 
-
-
-// 🔹 DOWNLOAD LPA EXCEL — Always regenerate latest file
+// ============================================================
+// 📥 DOWNLOAD LPA EXCEL — Generate and Download
+// ============================================================
 app.get("/api/download-lpa-excel/:plant/:month/:year", async (req, res) => {
   try {
     const { plant, month, year } = req.params;
-    const filePath = path.join("/tmp", `LPA_Calendar_${plant}_${month}_${year}.xlsx`);
+    const safePlant = plant.replace(/\s+/g, "_");
+    const fileName = `LPA_Calendar_${safePlant}_${month}_${year}.xlsx`;
+    const filePath = path.join("/tmp", fileName);
 
     // 🔹 Get latest data from database
     const [rows] = await dbPromise.query(
@@ -845,7 +929,7 @@ app.get("/api/download-lpa-excel/:plant/:month/:year", async (req, res) => {
     );
 
     if (!rows.length) {
-      return res.status(404).json({ error: "No calendar found" });
+      return res.status(404).json({ error: "No calendar found in database" });
     }
 
     const data = JSON.parse(rows[0].data_json);
@@ -853,31 +937,220 @@ app.get("/api/download-lpa-excel/:plant/:month/:year", async (req, res) => {
     // 🔹 Generate fresh Excel file for download
     await generateLpaExcelForDownload(plant, month, year, data, filePath);
 
-    return res.download(filePath, `LPA_Calendar_${plant}_${month}_${year}.xlsx`);
+    console.log(`📁 Download initiated for: ${fileName}`);
+    return res.download(filePath, fileName, (err) => {
+      if (err) {
+        console.error("❌ Download error:", err);
+        if (!res.headersSent) {
+          return res.status(500).json({ error: "Download failed" });
+        }
+      }
+    });
   } catch (err) {
     console.error("❌ Download Error:", err);
-    return res.status(500).json({ error: "Download failed" });
+    return res.status(500).json({ error: "Download failed", details: err.message });
   }
 });
-// 🔧 Helper: Generate Excel for Download Only
+
+// ============================================================
+// 🔧 Helper: Generate Excel for Download (Same structure as email version)
+// ============================================================
 async function generateLpaExcelForDownload(plant, month, year, data, excelPath) {
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet(`${month} ${year}`);
 
   const assignments = data?.assignments || [];
-  const daysInMonth = new Date(year, new Date(`${month} 1, ${year}`).getMonth() + 1, 0).getDate();
+  const uploadedData = data?.uploadedData || {};
+  const monthIndex = new Date(`${month} 1, ${year}`).getMonth();
+  const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
 
-  sheet.getRow(1).getCell(1).value = `${plant} – ${month} ${year}`;
-  sheet.getRow(1).font = { bold: true };
-  
-  for (let i = 1; i <= daysInMonth; i++) {
-    sheet.getRow(2).getCell(i + 1).value = i;
+  // ============================================================
+  // 🟦 HEADER LAYOUT (Same as email version)
+  // ============================================================
+  const totalCols = daysInMonth + 1;
+  const lastColLetter = sheet.getColumn(totalCols).letter;
+
+  // Row 1 — Title
+  sheet.mergeCells(`A1:${lastColLetter}1`);
+  const titleCell = sheet.getCell("A1");
+  titleCell.value = `${month.toUpperCase()} ${year} - ${plant}`;
+  titleCell.font = { size: 18, bold: true, color: { argb: "FFFFFFFF" } };
+  titleCell.alignment = { horizontal: "center", vertical: "middle" };
+  titleCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0077B6" } };
+  sheet.getRow(1).height = 35;
+
+  // Row 2 — Date Numbers
+  const dateRow = sheet.getRow(2);
+  dateRow.getCell(1).value = "Line";
+  for (let d = 1; d <= daysInMonth; d++) {
+    dateRow.getCell(d + 1).value = d;
   }
 
-  await workbook.xlsx.writeFile(excelPath);
-  console.log("📁 Download Excel created:", excelPath);
-}
+  // Row 3 — Day Names
+  const dayRow = sheet.getRow(3);
+  dayRow.getCell(1).value = "";
+  for (let d = 1; d <= daysInMonth; d++) {
+    const date = new Date(year, monthIndex, d);
+    const dayName = date.toLocaleDateString("en", { weekday: "short" });
+    dayRow.getCell(d + 1).value = dayName;
+  }
 
+  // Style header rows
+  [2, 3].forEach((r) => {
+    const row = sheet.getRow(r);
+    row.height = 22;
+    row.eachCell((cell) => {
+      cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+      cell.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 11 };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF00B4D8" } };
+      cell.border = {
+        top: { style: "thin", color: { argb: "FFBBBBBB" } },
+        left: { style: "thin", color: { argb: "FFBBBBBB" } },
+        bottom: { style: "thin", color: { argb: "FFBBBBBB" } },
+        right: { style: "thin", color: { argb: "FFBBBBBB" } },
+      };
+    });
+  });
+
+  // Mark Sundays in header
+  for (let d = 1; d <= daysInMonth; d++) {
+    const date = new Date(year, monthIndex, d);
+    if (date.getDay() === 0) {
+      dateRow.getCell(d + 1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFF4D4D" } };
+      dayRow.getCell(d + 1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFF4D4D" } };
+    }
+  }
+
+  // ============================================================
+  // 📅 Fill Calendar with Value Stream Grouping
+  // ============================================================
+  const allLines = [...new Set(assignments.map((a) => a.line))].sort();
+  const sublineNames = uploadedData.sublineNames || {};
+  const groupedLines = {};
+
+  allLines.forEach(line => {
+    const matchedVS = Object.keys(sublineNames).find(vs =>
+      sublineNames[vs].includes(line)
+    ) || "Other";
+    
+    if (!groupedLines[matchedVS]) groupedLines[matchedVS] = [];
+    groupedLines[matchedVS].push(line);
+  });
+
+  const roleColors = {
+    "Value Stream Leader": "FFB7E4C7",
+    "CFT Member": "FFE2C2FF",
+    "Customer Quality Engineer": "FFB3D9FF",
+    "Plant Head": "FFFFCC99",
+  };
+
+  const sundayFill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFCCCC" } };
+  let currentRow = 4;
+
+  Object.entries(groupedLines).forEach(([vs, lines]) => {
+    // Value Stream Header
+    const vsRow = sheet.getRow(currentRow);
+    vsRow.getCell(1).value = vs;
+    vsRow.getCell(1).font = { bold: true, size: 12, color: { argb: "FFFFFFFF" } };
+    vsRow.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF4A4A4A" } };
+    vsRow.height = 25;
+
+    for (let d = 1; d <= daysInMonth; d++) {
+      vsRow.getCell(d + 1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE0E0E0" } };
+    }
+
+    vsRow.eachCell((cell) => {
+      cell.border = {
+        top: { style: "medium", color: { argb: "FF000000" } },
+        left: { style: "thin", color: { argb: "FFDDDDDD" } },
+        bottom: { style: "medium", color: { argb: "FF000000" } },
+        right: { style: "thin", color: { argb: "FFDDDDDD" } },
+      };
+    });
+
+    currentRow++;
+
+    // Lines under this VS
+    lines.forEach((line) => {
+      const row = sheet.getRow(currentRow);
+      row.getCell(1).value = line;
+      row.getCell(1).font = { bold: true, size: 10 };
+      row.getCell(1).alignment = { horizontal: "left", vertical: "middle", indent: 1 };
+      row.height = 22;
+
+      for (let d = 1; d <= daysInMonth; d++) {
+        const date = new Date(year, monthIndex, d);
+        const dateStr = `${year}-${String(monthIndex + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+        const cell = row.getCell(d + 1);
+        cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+        cell.font = { size: 9 };
+
+        if (date.getDay() === 0) {
+          cell.value = "Holiday";
+          cell.fill = sundayFill;
+          cell.font = { color: { argb: "FFB00020" }, bold: true, italic: true, size: 9 };
+        } else {
+          const found = assignments.filter((a) => a.date === dateStr && a.line === line);
+          if (found.length > 0) {
+            const auditor = found.map((a) => a.manager).join(", ");
+            const type = found[0].type;
+            const color = roleColors[type] || "FFFFFFFF";
+            cell.value = auditor;
+            cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: color } };
+            cell.font = { size: 9, bold: true };
+          }
+        }
+      }
+
+      row.eachCell((cell) => {
+        cell.border = {
+          top: { style: "thin", color: { argb: "FFDDDDDD" } },
+          left: { style: "thin", color: { argb: "FFDDDDDD" } },
+          bottom: { style: "thin", color: { argb: "FFDDDDDD" } },
+          right: { style: "thin", color: { argb: "FFDDDDDD" } },
+        };
+      });
+
+      currentRow++;
+    });
+  });
+
+  // Freeze panes
+  sheet.views = [{ state: "frozen", xSplit: 1, ySplit: 3 }];
+
+  // Set column widths
+  sheet.getColumn(1).width = 32;
+  for (let i = 2; i <= totalCols; i++) sheet.getColumn(i).width = 11;
+
+  // Legend
+  const legendStart = currentRow + 2;
+  sheet.getRow(legendStart).getCell(1).value = "LEGEND:";
+  sheet.getRow(legendStart).getCell(1).font = { bold: true, size: 12 };
+
+  const legendItems = [
+    { text: "Value Stream Leader", color: "FFB7E4C7" },
+    { text: "CFT Member", color: "FFE2C2FF" },
+    { text: "Customer Quality Engineer", color: "FFB3D9FF" },
+    { text: "Plant Head", color: "FFFFCC99" },
+    { text: "Sunday - Holiday", color: "FFFFCCCC" },
+  ];
+
+  legendItems.forEach((item, i) => {
+    const row = sheet.getRow(legendStart + i + 1);
+    row.getCell(1).value = item.text;
+    row.getCell(1).font = { size: 10 };
+    row.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: item.color } };
+    row.getCell(1).border = {
+      top: { style: "thin" },
+      left: { style: "thin" },
+      bottom: { style: "thin" },
+      right: { style: "thin" },
+    };
+  });
+
+  await workbook.xlsx.writeFile(excelPath);
+  console.log("📁 Download Excel created successfully:", excelPath);
+}
 
 
 // --------------------------------------------------
