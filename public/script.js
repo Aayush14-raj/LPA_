@@ -207,10 +207,11 @@ const auditItems = {
     ]
   }
 };
-// 🌎 Auto-detect backend server (local or deployed)
-const API_BASE = window.location.origin.includes("localhost")
-  ? "http://localhost:5000"
-  : "https://<your-render-backend-url>";
+const API_BASE =
+  window.location.hostname.includes("localhost")
+    ? "http://localhost:5000"
+    : "https://lpa-final-n43q.onrender.com";
+
 
 
 
