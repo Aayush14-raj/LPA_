@@ -10,6 +10,19 @@ const nodemailer = require("nodemailer");
 const ExcelJS = require("exceljs");
 const mysql = require("mysql2");
 const mysqlPromise = require("mysql2/promise");
+
+// Load correct env file depending on environment
+if (process.env.NODE_ENV === "production") {
+  require("dotenv").config({ path: ".env" });
+  console.log("🚀 PRODUCTION MODE → Using Railway DB");
+} else {
+  require("dotenv").config({ path: ".env.local" });
+  console.log("💻 LOCAL MODE → Using Local MySQL DB");
+}
+
+// ⭐ Create Express App (MUST be before app.use calls)
+const app = express();
+
 // ⭐ Required for Render frontend requests
 app.use(cors({
   origin: "*",
@@ -17,21 +30,9 @@ app.use(cors({
   allowedHeaders: ["Content-Type"]
 }));
 
-
-// Load correct env file depending on environment
-if (process.env.NODE_ENV === "production") {
-  // Render/Cloud mode → use .env (Railway DB creds)
-  require("dotenv").config({ path: ".env" });
-  console.log("🚀 PRODUCTION MODE → Using Railway DB");
-} else {
-  // Local mode → use .env.local (Local MySQL creds)
-  require("dotenv").config({ path: ".env.local" });
-  console.log("💻 LOCAL MODE → Using Local MySQL DB");
-}
-
-const app = express();
-app.use(cors());
+// ⭐ Body Parser Middleware
 app.use(bodyParser.json());
+
 
 // Debugging (Recommended to SEE which DB is used)
 console.log("➡ DB HOST:", process.env.DB_HOST);
