@@ -210,7 +210,7 @@ const auditItems = {
 const API_BASE =
   window.location.hostname.includes("localhost")
     ? "http://localhost:5000"
-    : "https://lpa-complete.onrender.com/";
+    : "https://lpa-complete.onrender.com";
 
 
 
@@ -1433,7 +1433,9 @@ document.getElementById("createLpaBtn").addEventListener("click", () => {
     const plant = document.getElementById("plantSelect").value;
     const month = new Date().toLocaleString("default", { month: "long" });
     const year = new Date().getFullYear();
-    window.open(`${API_BASE}/api/download-lpa-excel/${plant}/${month}/${year}`, "_blank");
+    window.location.href =
+  `${API_BASE}/api/download-lpa-excel/${plant}/${month}/${year}`;
+
   });
 
   const plantSelectEl = document.getElementById("plantSelect");
