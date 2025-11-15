@@ -418,3 +418,20 @@ h1, h2, h3, h4 {
 .animate-slide-in {
   animation: slideIn 0.5s ease-out;
 }
+.lpa-scroll-container {
+  max-height: 600px;
+  overflow-x: auto;
+  overflow-y: auto;
+}
+
+.lpa-scroll-container table {
+  min-width: 100%;
+}
+
+.lpa-scroll-container th.sticky,
+.lpa-scroll-container td.sticky {
+  position: sticky;
+  left: 0;
+  z-index: 10;
+  background-color: inherit;
+}

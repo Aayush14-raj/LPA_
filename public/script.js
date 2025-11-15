@@ -1508,7 +1508,7 @@ async function handleLpaCalendarGeneration() {
       return;
     }
 
-    data.uploadedData = uploadedData;
+    
     localStorage.setItem("latestLpaCalendar", JSON.stringify(data));
 
     const container = document.getElementById("lpaCalendarDisplay");
@@ -1834,11 +1834,21 @@ function createLpaCalendarData(plant, vsWithSubs) {
   };
 }
 
-
 // 🌿 Enhanced Render Calendar with Better Styling
 function renderLpaCalendar(data) {
   const container = document.getElementById("lpaCalendarDisplay");
   const { plant, month, assignments } = data;
+
+  // Validate data
+  if (!assignments || assignments.length === 0) {
+    container.innerHTML = `
+      <div class="bg-red-50 border border-red-200 rounded-lg p-4 text-red-800">
+        <p class="font-semibold">⚠️ No calendar data to display</p>
+        <p class="text-sm">Please generate the calendar first.</p>
+      </div>
+    `;
+    return;
+  }
 
   // 🗓️ Build unique sorted date list
   const uniqueDates = [...new Set(assignments.map(a => a.date))].sort((a, b) => new Date(a) - new Date(b));
@@ -1864,9 +1874,10 @@ function renderLpaCalendar(data) {
   // 🗓️ Add date headers
   dates.forEach(d => {
     const dayName = d.toLocaleDateString("en", { weekday: "short" });
+    const dayNum = d.getDate();
     html += `
       <th class="border p-2 text-center text-xs font-semibold text-gray-600">
-        <div>${d.getDate()}</div>
+        <div>${dayNum}</div>
         <div class="text-gray-400">${dayName}</div>
       </th>`;
   });
@@ -1908,8 +1919,9 @@ function renderLpaCalendar(data) {
         const dateStr = date.toISOString().split("T")[0];
         const cellData = assignments.filter(a => a.date === dateStr && a.line === line);
 
-        if (cellData.some(a => a.type === "Holiday")) {
-          html += `<td class="border p-2 text-center bg-gray-200 text-gray-600 font-semibold">Holiday</td>`;
+        // Check if it's a Sunday (Holiday)
+        if (date.getDay() === 0) {
+          html += `<td class="border p-2 text-center bg-red-50 text-red-600 font-semibold">Holiday</td>`;
           return;
         }
 
@@ -1925,7 +1937,7 @@ function renderLpaCalendar(data) {
           cellData.forEach(a => {
             const colorClass = colorMap[a.type] || "bg-gray-100 text-gray-800 border-gray-300";
             html += `
-              <div class="${colorClass} border rounded px-1 py-0.5 text-[11px] font-medium m-0.5">
+              <div class="${colorClass} border rounded px-1 py-0.5 text-[11px] font-medium m-0.5" title="${a.type}">
                 ${a.manager}
               </div>
             `;
@@ -1950,16 +1962,37 @@ function renderLpaCalendar(data) {
 
   // 🗂️ Legend (for clarity)
   html += `
-    <div class="mt-4 flex flex-wrap gap-4 text-xs text-gray-700">
-      <div class="flex items-center"><div class="w-3 h-3 bg-green-100 border border-green-300 rounded mr-2"></div>Value Stream Leader</div>
-      <div class="flex items-center"><div class="w-3 h-3 bg-purple-100 border border-purple-300 rounded mr-2"></div>CFT Member</div>
-      <div class="flex items-center"><div class="w-3 h-3 bg-blue-100 border border-blue-300 rounded mr-2"></div>Customer Quality Engineer</div>
-      <div class="flex items-center"><div class="w-3 h-3 bg-orange-100 border border-orange-300 rounded mr-2"></div>Plant Head</div>
+    <div class="mt-4 p-4 bg-gray-50 rounded-lg border">
+      <h4 class="font-semibold text-gray-700 mb-2">Legend:</h4>
+      <div class="flex flex-wrap gap-4 text-xs text-gray-700">
+        <div class="flex items-center">
+          <div class="w-3 h-3 bg-green-100 border border-green-300 rounded mr-2"></div>
+          Value Stream Leader
+        </div>
+        <div class="flex items-center">
+          <div class="w-3 h-3 bg-purple-100 border border-purple-300 rounded mr-2"></div>
+          CFT Member
+        </div>
+        <div class="flex items-center">
+          <div class="w-3 h-3 bg-blue-100 border border-blue-300 rounded mr-2"></div>
+          Customer Quality Engineer
+        </div>
+        <div class="flex items-center">
+          <div class="w-3 h-3 bg-orange-100 border border-orange-300 rounded mr-2"></div>
+          Plant Head
+        </div>
+        <div class="flex items-center">
+          <div class="w-3 h-3 bg-red-50 border border-red-300 rounded mr-2"></div>
+          Sunday - Holiday
+        </div>
+      </div>
     </div>
   `;
 
   // 🧩 Render to DOM
   container.innerHTML = html;
+  
+  console.log("✅ Calendar rendered successfully with", assignments.length, "assignments");
 }
 /* -------------------- DASHBOARD FUNCTIONALITY -------------------- */
 

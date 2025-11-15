@@ -583,290 +583,193 @@ app.post("/api/saveAction", (req, res) => {
   });
 });
 
-// ------------------------------------------------
-
 // ============================================================
-// 📊 LPA CALENDAR API ENDPOINTS — CORRECTED VERSION
+// 📊 LPA CALENDAR API ENDPOINTS — COMPLETE FIXED VERSION
 // ============================================================
 
-app.post('/api/lpa-calendar', async (req, res) => {
+// 🔍 DEBUG ENDPOINT - Check what's in database
+app.get("/api/debug-lpa/:plant/:month/:year", async (req, res) => {
   try {
-    const { plant, month, year, data } = req.body;
-    const [result] = await dbPromise.query(
-      'REPLACE INTO lpa_calendar (plant, month, year, data_json) VALUES (?, ?, ?, ?)',
-      [plant, month, year, JSON.stringify(data)]
+    const { plant, month, year } = req.params;
+    const [rows] = await dbPromise.query(
+      "SELECT data_json FROM lpa_calendar WHERE plant=? AND month=? AND year=? LIMIT 1",
+      [plant, month, year]
     );
-    res.json({ success: true });
+    
+    if (!rows.length) {
+      return res.json({ error: "Not found in database" });
+    }
+    
+    const rawData = rows[0].data_json;
+    
+    res.json({
+      found: true,
+      dataType: typeof rawData,
+      isString: typeof rawData === 'string',
+      isObject: typeof rawData === 'object',
+      isNull: rawData === null,
+      preview: typeof rawData === 'string' ? rawData.substring(0, 200) : 
+               typeof rawData === 'object' ? JSON.stringify(rawData).substring(0, 200) : 
+               String(rawData),
+      length: typeof rawData === 'string' ? rawData.length : 
+              typeof rawData === 'object' ? JSON.stringify(rawData).length : 0
+    });
   } catch (err) {
-    console.error("❌ LPA Calendar Save Error:", err);
-    res.status(500).json({ error: "Failed to save LPA calendar" });
+    console.error("Debug error:", err);
+    res.status(500).json({ error: err.message, stack: err.stack });
   }
 });
 
+// 💾 SAVE LPA Calendar
+app.post('/api/lpa-calendar', async (req, res) => {
+  try {
+    const { plant, month, year, data } = req.body;
+    
+    console.log("💾 Saving LPA Calendar...");
+    console.log("📋 Plant:", plant, "Month:", month, "Year:", year);
+    console.log("📋 Data type received:", typeof data);
+    
+    if (!plant || !month || !year || !data) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+    
+    // Ensure proper JSON string
+    let jsonString;
+    
+    if (typeof data === 'string') {
+      try {
+        JSON.parse(data); // Validate
+        jsonString = data;
+      } catch (e) {
+        console.error("❌ Invalid JSON string received");
+        return res.status(400).json({ error: "Invalid JSON string" });
+      }
+    } else if (typeof data === 'object' && data !== null) {
+      jsonString = JSON.stringify(data);
+    } else {
+      return res.status(400).json({ error: "Invalid data type" });
+    }
+    
+    console.log("✅ JSON string prepared, length:", jsonString.length);
+    
+    const [result] = await dbPromise.query(
+      'REPLACE INTO lpa_calendar (plant, month, year, data_json) VALUES (?, ?, ?, ?)',
+      [plant, month, year, jsonString]
+    );
+    
+    console.log("✅ Calendar saved to database");
+    res.json({ success: true });
+    
+  } catch (err) {
+    console.error("❌ Save Error:", err);
+    res.status(500).json({ error: "Failed to save", details: err.message });
+  }
+});
+
+// 📥 GET LPA Calendar
 app.get('/api/lpa-calendar', async (req, res) => {
   try {
     const { plant, month, year } = req.query;
+    
+    console.log(`📥 Fetching: ${plant} - ${month} ${year}`);
+    
     const [rows] = await dbPromise.query(
       'SELECT data_json FROM lpa_calendar WHERE plant=? AND month=? AND year=? LIMIT 1',
       [plant, month, year]
     );
-    if (!rows.length) return res.status(404).json({ error: "Not found" });
-    res.json(JSON.parse(rows[0].data_json));
+    
+    if (!rows.length) {
+      return res.status(404).json({ error: "Not found" });
+    }
+    
+    const rawData = rows[0].data_json;
+    let parsedData;
+    
+    if (typeof rawData === 'string') {
+      parsedData = JSON.parse(rawData);
+    } else {
+      parsedData = rawData;
+    }
+    
+    res.json(parsedData);
+    
   } catch (err) {
-    console.error("❌ LPA Calendar Fetch Error:", err);
-    res.status(500).json({ error: "Failed to fetch LPA calendar" });
+    console.error("❌ Fetch Error:", err);
+    res.status(500).json({ error: "Failed to fetch", details: err.message });
   }
 });
 
-// ============================================================
-// 📧 API: Send LPA Calendar Email with PROPER Calendar Excel
-// ============================================================
+// 🗑️ DELETE LPA Calendar (for clearing bad data)
+app.delete("/api/lpa-calendar/:plant/:month/:year", async (req, res) => {
+  try {
+    const { plant, month, year } = req.params;
+    
+    console.log(`🗑️ Deleting: ${plant} - ${month} ${year}`);
+    
+    const [result] = await dbPromise.query(
+      "DELETE FROM lpa_calendar WHERE plant=? AND month=? AND year=?",
+      [plant, month, year]
+    );
+    
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: "Calendar not found" });
+    }
+    
+    console.log("✅ Calendar deleted");
+    res.json({ success: true, message: "Calendar deleted" });
+    
+  } catch (err) {
+    console.error("❌ Delete Error:", err);
+    res.status(500).json({ error: "Failed to delete", details: err.message });
+  }
+});
+
+// 📧 SEND EMAIL with LPA Calendar
 app.post("/api/send-lpa-calendar-mail", async (req, res) => {
   try {
+    console.log("📧 Starting email process...");
+    
     const { plant, month, year, data } = req.body;
+    
+    if (!plant || !month || !year || !data) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+    
     const uploadedData = data?.uploadedData || {};
     const emails = new Set();
 
-    // Collect recipients
     const allRoles = [
       ...(uploadedData.valueStreamLeaders || []),
       ...(uploadedData.customerQualityEngineers || []),
       ...(uploadedData.plantHODs || []),
       ...(uploadedData.crossFunctionalTeams || []),
     ];
+    
     allRoles.forEach((p) => p.email && emails.add(p.email));
-    if (emails.size === 0) return res.status(400).json({ error: "No emails found" });
+    
+    if (emails.size === 0) {
+      console.log("⚠️ No emails found, skipping email send");
+      return res.json({ success: true, skipped: true, message: "No emails to send" });
+    }
+    
+    console.log(`✅ Sending to ${emails.size} recipients`);
 
-    // ============================================================
-    // 📊 Generate Professional Excel (Calendar Layout)
-    // ============================================================
     const safePlant = (plant || "Plant").replace(/\s+/g, "_");
     const fileName = `LPA_Calendar_${safePlant}_${month}_${year}.xlsx`;
     const excelPath = path.join("/tmp", fileName);
 
-    const workbook = new ExcelJS.Workbook();
-    const sheet = workbook.addWorksheet(`${month} ${year}`);
-
-    const assignments = data?.assignments || [];
-    const monthIndex = new Date(`${month} 1, ${year}`).getMonth();
-    const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
-
-    // ============================================================
-    // 🟦 HEADER LAYOUT (Row1 = Month, Row2 = Dates, Row3 = Day Names)
-    // ============================================================
-    const totalCols = daysInMonth + 1; // 1 for 'Line'
-    const lastColLetter = sheet.getColumn(totalCols).letter;
-
-    // Row 1 — Big merged Month Name
-    sheet.mergeCells(`A1:${lastColLetter}1`);
-    const titleCell = sheet.getCell("A1");
-    titleCell.value = `${month.toUpperCase()} ${year} - ${plant}`;
-    titleCell.font = { size: 18, bold: true, color: { argb: "FFFFFFFF" } };
-    titleCell.alignment = { horizontal: "center", vertical: "middle" };
-    titleCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0077B6" } };
-    sheet.getRow(1).height = 35;
-
-    // Row 2 — Date Numbers
-    const dateRow = sheet.getRow(2);
-    dateRow.getCell(1).value = "Line";
-    for (let d = 1; d <= daysInMonth; d++) {
-      dateRow.getCell(d + 1).value = d;
-    }
-
-    // Row 3 — Day Names
-    const dayRow = sheet.getRow(3);
-    dayRow.getCell(1).value = "";
-    for (let d = 1; d <= daysInMonth; d++) {
-      const date = new Date(year, monthIndex, d);
-      const dayName = date.toLocaleDateString("en", { weekday: "short" });
-      dayRow.getCell(d + 1).value = dayName;
-    }
-
-    // Style for header rows
-    [2, 3].forEach((r) => {
-      const row = sheet.getRow(r);
-      row.height = 22;
-      row.eachCell((cell, col) => {
-        cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
-        cell.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 11 };
-        cell.fill = {
-          type: "pattern",
-          pattern: "solid",
-          fgColor: { argb: "FF00B4D8" },
-        };
-        cell.border = {
-          top: { style: "thin", color: { argb: "FFBBBBBB" } },
-          left: { style: "thin", color: { argb: "FFBBBBBB" } },
-          bottom: { style: "thin", color: { argb: "FFBBBBBB" } },
-          right: { style: "thin", color: { argb: "FFBBBBBB" } },
-        };
-      });
-    });
-
-    // Make Sunday columns red in header
-    for (let d = 1; d <= daysInMonth; d++) {
-      const date = new Date(year, monthIndex, d);
-      if (date.getDay() === 0) { // Sunday
-        dateRow.getCell(d + 1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFF4D4D" } };
-        dayRow.getCell(d + 1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFF4D4D" } };
-      }
-    }
-
-    // ============================================================
-    // 📅 Fill Calendar Rows (Lines × Days) with Value Stream Grouping
-    // ============================================================
-    const allLines = [...new Set(assignments.map((a) => a.line))].sort();
+    console.log("📊 Generating Excel for email...");
     
-    // Group lines by value stream
-    const sublineNames = uploadedData.sublineNames || {};
-    const groupedLines = {};
+    // Generate Excel using the helper function
+    await generateLpaExcelForEmail(plant, month, year, data, excelPath);
     
-    allLines.forEach(line => {
-      const matchedVS = Object.keys(sublineNames).find(vs =>
-        sublineNames[vs].includes(line)
-      ) || "Other";
-      
-      if (!groupedLines[matchedVS]) groupedLines[matchedVS] = [];
-      groupedLines[matchedVS].push(line);
-    });
+    console.log("✅ Excel generated, sending email...");
 
-    const roleColors = {
-      "Value Stream Leader": "FFB7E4C7", // green
-      "CFT Member": "FFE2C2FF", // purple
-      "Customer Quality Engineer": "FFB3D9FF", // blue
-      "Plant Head": "FFFFCC99", // orange
-    };
-
-    const sundayFill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFCCCC" } };
-
-    let currentRow = 4;
-
-    // Render grouped value streams
-    Object.entries(groupedLines).forEach(([vs, lines]) => {
-      // Value Stream Header Row
-      const vsRow = sheet.getRow(currentRow);
-      vsRow.getCell(1).value = vs;
-      vsRow.getCell(1).font = { bold: true, size: 12, color: { argb: "FFFFFFFF" } };
-      vsRow.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF4A4A4A" } };
-      vsRow.getCell(1).alignment = { horizontal: "left", vertical: "middle" };
-      vsRow.height = 25;
-
-      // Fill rest of VS header row
-      for (let d = 1; d <= daysInMonth; d++) {
-        const cell = vsRow.getCell(d + 1);
-        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE0E0E0" } };
-      }
-
-      // Add borders to VS header
-      vsRow.eachCell((cell) => {
-        cell.border = {
-          top: { style: "medium", color: { argb: "FF000000" } },
-          left: { style: "thin", color: { argb: "FFDDDDDD" } },
-          bottom: { style: "medium", color: { argb: "FF000000" } },
-          right: { style: "thin", color: { argb: "FFDDDDDD" } },
-        };
-      });
-
-      currentRow++;
-
-      // Render each line under this value stream
-      lines.forEach((line) => {
-        const row = sheet.getRow(currentRow);
-        row.getCell(1).value = line;
-        row.getCell(1).font = { bold: true, size: 10 };
-        row.getCell(1).alignment = { horizontal: "left", vertical: "middle", indent: 1 };
-        row.height = 22;
-
-        for (let d = 1; d <= daysInMonth; d++) {
-          const date = new Date(year, monthIndex, d);
-          const dateStr = `${year}-${String(monthIndex + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-          const cell = row.getCell(d + 1);
-          cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
-          cell.font = { size: 9 };
-
-          if (date.getDay() === 0) { // Sunday
-            cell.value = "Holiday";
-            cell.fill = sundayFill;
-            cell.font = { color: { argb: "FFB00020" }, bold: true, italic: true, size: 9 };
-          } else {
-            const found = assignments.filter((a) => a.date === dateStr && a.line === line);
-            if (found.length > 0) {
-              const auditor = found.map((a) => a.manager).join(", ");
-              const type = found[0].type;
-              const color = roleColors[type] || "FFFFFFFF";
-              cell.value = auditor;
-              cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: color } };
-              cell.font = { size: 9, bold: true };
-            }
-          }
-        }
-
-        // Borders for all data cells
-        row.eachCell((cell) => {
-          cell.border = {
-            top: { style: "thin", color: { argb: "FFDDDDDD" } },
-            left: { style: "thin", color: { argb: "FFDDDDDD" } },
-            bottom: { style: "thin", color: { argb: "FFDDDDDD" } },
-            right: { style: "thin", color: { argb: "FFDDDDDD" } },
-          };
-        });
-
-        currentRow++;
-      });
-    });
-
-    // ============================================================
-    // 🧊 Freeze top 3 rows + first column
-    // ============================================================
-    sheet.views = [{ state: "frozen", xSplit: 1, ySplit: 3 }];
-
-    // Set widths
-    sheet.getColumn(1).width = 32;
-    for (let i = 2; i <= totalCols; i++) sheet.getColumn(i).width = 11;
-
-    // ============================================================
-    // 🗂️ Add Legend at bottom
-    // ============================================================
-    const legendStart = currentRow + 2;
-    const legendRow1 = sheet.getRow(legendStart);
-    legendRow1.getCell(1).value = "LEGEND:";
-    legendRow1.getCell(1).font = { bold: true, size: 12 };
-    legendRow1.height = 20;
-
-    const legendItems = [
-      { text: "Value Stream Leader", color: "FFB7E4C7" },
-      { text: "CFT Member", color: "FFE2C2FF" },
-      { text: "Customer Quality Engineer", color: "FFB3D9FF" },
-      { text: "Plant Head", color: "FFFFCC99" },
-      { text: "Sunday - Holiday", color: "FFFFCCCC" },
-    ];
-
-    legendItems.forEach((item, i) => {
-      const row = sheet.getRow(legendStart + i + 1);
-      row.getCell(1).value = item.text;
-      row.getCell(1).font = { size: 10 };
-      row.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: item.color } };
-      row.getCell(1).border = {
-        top: { style: "thin" },
-        left: { style: "thin" },
-        bottom: { style: "thin" },
-        right: { style: "thin" },
-      };
-      row.height = 18;
-    });
-
-    // Save Excel file
-    await workbook.xlsx.writeFile(excelPath);
-    console.log(`📊 Excel generated at: ${excelPath}`);
-
-    // ============================================================
-    // ✉️ Send Email with Attachment
-    // ============================================================
     const transporter = nodemailer.createTransport({
       service: "gmail",
       auth: {
         user: "aayushrajiaf1404@gmail.com",
-        pass: "lhvq ggfm ztga ktub", // Gmail App Password
+        pass: "lhvq ggfm ztga ktub",
       },
     });
 
@@ -878,23 +781,7 @@ app.post("/api/send-lpa-calendar-mail", async (req, res) => {
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <h2 style="color: #0077B6;">LPA Calendar Generated</h2>
           <p>Dear Team,</p>
-          <p>Your <b>LPA Calendar</b> for <b>${plant}</b> (${month} ${year}) has been generated successfully.</p>
-          <p>📎 The calendar is attached in Excel format with the following features:</p>
-          <ul>
-            <li>Month header with plant name</li>
-            <li>Date numbers and weekday labels</li>
-            <li>Sundays marked as Holiday</li>
-            <li>Color-coded auditor assignments</li>
-            <li>Grouped by Value Streams</li>
-          </ul>
-          <p><b>Color Legend:</b></p>
-          <ul style="list-style: none; padding: 0;">
-            <li>🟩 Value Stream Leader</li>
-            <li>🟪 CFT Member</li>
-            <li>🟦 Customer Quality Engineer</li>
-            <li>🟧 Plant Head</li>
-            <li>🟥 Sunday - Holiday</li>
-          </ul>
+          <p>Your <b>LPA Calendar</b> for <b>${plant}</b> (${month} ${year}) is attached.</p>
           <br>
           <p>Best regards,<br><b>LPA Calendar System</b></p>
         </div>
@@ -903,254 +790,175 @@ app.post("/api/send-lpa-calendar-mail", async (req, res) => {
     };
 
     await transporter.sendMail(mailOptions);
-    console.log(`📧 Email sent successfully to: ${[...emails].join(", ")}`);
+    console.log("✅ Email sent successfully");
 
-    res.json({ success: true, file: fileName, sentTo: [...emails] });
+    res.json({ success: true, sentTo: [...emails] });
+    
   } catch (err) {
-    console.error("❌ Mail send error:", err);
-    res.status(500).json({ error: "Mail failed", details: err.message });
+    console.error("❌ Email Error:", err);
+    res.status(500).json({ error: "Email failed", details: err.message });
   }
 });
-
-// ============================================================
-// 📥 DOWNLOAD LPA EXCEL — Generate and Download
-// ============================================================
 app.get("/api/download-lpa-excel/:plant/:month/:year", async (req, res) => {
   try {
     const { plant, month, year } = req.params;
-    const safePlant = plant.replace(/\s+/g, "_");
-    const fileName = `LPA_Calendar_${safePlant}_${month}_${year}.xlsx`;
-    const filePath = path.join("/tmp", fileName);
 
-    // 🔹 Get latest data from database
+    const tmpDir = path.join(__dirname, "tmp");
+    if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir);
+
+    const filePath = path.join(tmpDir, `LPA_Calendar_${plant}_${month}_${year}.xlsx`);
+
     const [rows] = await dbPromise.query(
       "SELECT data_json FROM lpa_calendar WHERE plant=? AND month=? AND year=? LIMIT 1",
       [plant, month, year]
     );
 
-    if (!rows.length) {
-      return res.status(404).json({ error: "No calendar found in database" });
-    }
+    const raw = rows[0].data_json;
+    const data = typeof raw === "string" ? JSON.parse(raw) : raw;
 
-    const data = JSON.parse(rows[0].data_json);
+    await generateLpaExcelFile(plant, month, year, data, filePath);
 
-    // 🔹 Generate fresh Excel file for download
-    await generateLpaExcelForDownload(plant, month, year, data, filePath);
+    res.download(filePath);
 
-    console.log(`📁 Download initiated for: ${fileName}`);
-    return res.download(filePath, fileName, (err) => {
-      if (err) {
-        console.error("❌ Download error:", err);
-        if (!res.headersSent) {
-          return res.status(500).json({ error: "Download failed" });
-        }
-      }
-    });
   } catch (err) {
-    console.error("❌ Download Error:", err);
-    return res.status(500).json({ error: "Download failed", details: err.message });
+    res.status(500).json({ error: "Download failed", details: err.message });
   }
 });
 
 // ============================================================
-// 🔧 Helper: Generate Excel for Download (Same structure as email version)
+// 📊 MASTER EXCEL GENERATOR — USED BY BOTH EMAIL + DOWNLOAD
 // ============================================================
-async function generateLpaExcelForDownload(plant, month, year, data, excelPath) {
-  const workbook = new ExcelJS.Workbook();
-  const sheet = workbook.addWorksheet(`${month} ${year}`);
+async function generateLpaExcelFile(plant, month, year, data, excelPath) {
+  try {
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet(`${month} ${year}`);
 
-  const assignments = data?.assignments || [];
-  const uploadedData = data?.uploadedData || {};
-  const monthIndex = new Date(`${month} 1, ${year}`).getMonth();
-  const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+    const assignments = data?.assignments || [];
+    const uploadedData = data?.uploadedData || {};
 
-  // ============================================================
-  // 🟦 HEADER LAYOUT (Same as email version)
-  // ============================================================
-  const totalCols = daysInMonth + 1;
-  const lastColLetter = sheet.getColumn(totalCols).letter;
+    const monthIndex = new Date(`${month} 1, ${year}`).getMonth();
+    const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
 
-  // Row 1 — Title
-  sheet.mergeCells(`A1:${lastColLetter}1`);
-  const titleCell = sheet.getCell("A1");
-  titleCell.value = `${month.toUpperCase()} ${year} - ${plant}`;
-  titleCell.font = { size: 18, bold: true, color: { argb: "FFFFFFFF" } };
-  titleCell.alignment = { horizontal: "center", vertical: "middle" };
-  titleCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0077B6" } };
-  sheet.getRow(1).height = 35;
+    const totalCols = daysInMonth + 1;
+    const lastColLetter = sheet.getColumn(totalCols).letter;
 
-  // Row 2 — Date Numbers
-  const dateRow = sheet.getRow(2);
-  dateRow.getCell(1).value = "Line";
-  for (let d = 1; d <= daysInMonth; d++) {
-    dateRow.getCell(d + 1).value = d;
-  }
+    // Title
+    sheet.mergeCells(`A1:${lastColLetter}1`);
+    const titleCell = sheet.getCell("A1");
+    titleCell.value = `${month.toUpperCase()} ${year} - ${plant}`;
+    titleCell.font = { size: 18, bold: true, color: { argb: "FFFFFFFF" } };
+    titleCell.alignment = { horizontal: "center", vertical: "middle" };
+    titleCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0077B6" } };
+    sheet.getRow(1).height = 35;
 
-  // Row 3 — Day Names
-  const dayRow = sheet.getRow(3);
-  dayRow.getCell(1).value = "";
-  for (let d = 1; d <= daysInMonth; d++) {
-    const date = new Date(year, monthIndex, d);
-    const dayName = date.toLocaleDateString("en", { weekday: "short" });
-    dayRow.getCell(d + 1).value = dayName;
-  }
-
-  // Style header rows
-  [2, 3].forEach((r) => {
-    const row = sheet.getRow(r);
-    row.height = 22;
-    row.eachCell((cell) => {
-      cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
-      cell.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 11 };
-      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF00B4D8" } };
-      cell.border = {
-        top: { style: "thin", color: { argb: "FFBBBBBB" } },
-        left: { style: "thin", color: { argb: "FFBBBBBB" } },
-        bottom: { style: "thin", color: { argb: "FFBBBBBB" } },
-        right: { style: "thin", color: { argb: "FFBBBBBB" } },
-      };
-    });
-  });
-
-  // Mark Sundays in header
-  for (let d = 1; d <= daysInMonth; d++) {
-    const date = new Date(year, monthIndex, d);
-    if (date.getDay() === 0) {
-      dateRow.getCell(d + 1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFF4D4D" } };
-      dayRow.getCell(d + 1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFF4D4D" } };
-    }
-  }
-
-  // ============================================================
-  // 📅 Fill Calendar with Value Stream Grouping
-  // ============================================================
-  const allLines = [...new Set(assignments.map((a) => a.line))].sort();
-  const sublineNames = uploadedData.sublineNames || {};
-  const groupedLines = {};
-
-  allLines.forEach(line => {
-    const matchedVS = Object.keys(sublineNames).find(vs =>
-      sublineNames[vs].includes(line)
-    ) || "Other";
-    
-    if (!groupedLines[matchedVS]) groupedLines[matchedVS] = [];
-    groupedLines[matchedVS].push(line);
-  });
-
-  const roleColors = {
-    "Value Stream Leader": "FFB7E4C7",
-    "CFT Member": "FFE2C2FF",
-    "Customer Quality Engineer": "FFB3D9FF",
-    "Plant Head": "FFFFCC99",
-  };
-
-  const sundayFill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFCCCC" } };
-  let currentRow = 4;
-
-  Object.entries(groupedLines).forEach(([vs, lines]) => {
-    // Value Stream Header
-    const vsRow = sheet.getRow(currentRow);
-    vsRow.getCell(1).value = vs;
-    vsRow.getCell(1).font = { bold: true, size: 12, color: { argb: "FFFFFFFF" } };
-    vsRow.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF4A4A4A" } };
-    vsRow.height = 25;
-
+    // Dates
+    const dateRow = sheet.getRow(2);
+    dateRow.getCell(1).value = "Line";
     for (let d = 1; d <= daysInMonth; d++) {
-      vsRow.getCell(d + 1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE0E0E0" } };
+      dateRow.getCell(d + 1).value = d;
     }
 
-    vsRow.eachCell((cell) => {
-      cell.border = {
-        top: { style: "medium", color: { argb: "FF000000" } },
-        left: { style: "thin", color: { argb: "FFDDDDDD" } },
-        bottom: { style: "medium", color: { argb: "FF000000" } },
-        right: { style: "thin", color: { argb: "FFDDDDDD" } },
-      };
+    // Day Names
+    const dayRow = sheet.getRow(3);
+    for (let d = 1; d <= daysInMonth; d++) {
+      const date = new Date(year, monthIndex, d);
+      dayRow.getCell(d + 1).value = date.toLocaleDateString("en", { weekday: "short" });
+    }
+
+    // Style Headers
+    [2, 3].forEach((r) => {
+      const row = sheet.getRow(r);
+      row.height = 22;
+      row.eachCell(cell => {
+        cell.font = { bold: true, size: 11, color: { argb: "FFFFFFFF" } };
+        cell.alignment = { horizontal: "center", vertical: "middle" };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF00B4D8" } };
+      });
     });
 
-    currentRow++;
+    // Sundays marked
+    for (let d = 1; d <= daysInMonth; d++) {
+      if (new Date(year, monthIndex, d).getDay() === 0) {
+        dateRow.getCell(d + 1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFF4D4D" }};
+        dayRow.getCell(d + 1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFF4D4D" }};
+      }
+    }
 
-    // Lines under this VS
-    lines.forEach((line) => {
-      const row = sheet.getRow(currentRow);
-      row.getCell(1).value = line;
-      row.getCell(1).font = { bold: true, size: 10 };
-      row.getCell(1).alignment = { horizontal: "left", vertical: "middle", indent: 1 };
-      row.height = 22;
+    // Group lines
+    const allLines = [...new Set(assignments.map(a => a.line))].sort();
+    const sublineNames = uploadedData.sublineNames || {};
+    const groupedLines = {};
 
-      for (let d = 1; d <= daysInMonth; d++) {
-        const date = new Date(year, monthIndex, d);
-        const dateStr = `${year}-${String(monthIndex + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-        const cell = row.getCell(d + 1);
-        cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
-        cell.font = { size: 9 };
+    allLines.forEach(line => {
+      const vs = Object.keys(sublineNames).find(v => sublineNames[v].includes(line)) || "Other";
+      if (!groupedLines[vs]) groupedLines[vs] = [];
+      groupedLines[vs].push(line);
+    });
 
-        if (date.getDay() === 0) {
-          cell.value = "Holiday";
-          cell.fill = sundayFill;
-          cell.font = { color: { argb: "FFB00020" }, bold: true, italic: true, size: 9 };
-        } else {
-          const found = assignments.filter((a) => a.date === dateStr && a.line === line);
-          if (found.length > 0) {
-            const auditor = found.map((a) => a.manager).join(", ");
-            const type = found[0].type;
-            const color = roleColors[type] || "FFFFFFFF";
-            cell.value = auditor;
-            cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: color } };
-            cell.font = { size: 9, bold: true };
+    const colors = {
+      "Value Stream Leader": "FFB7E4C7",
+      "CFT Member": "FFE2C2FF",
+      "Customer Quality Engineer": "FFB3D9FF",
+      "Plant Head": "FFFFCC99",
+    };
+
+    let rowIdx = 4;
+
+    Object.entries(groupedLines).forEach(([vs, lines]) => {
+      // VS header
+      const vsRow = sheet.getRow(rowIdx++);
+      vsRow.getCell(1).value = vs;
+      vsRow.getCell(1).font = { bold: true, size: 12, color: { argb: "FFFFFFFF" }};
+      vsRow.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF4A4A4A" }};
+      vsRow.height = 25;
+
+      lines.forEach(line => {
+        const row = sheet.getRow(rowIdx++);
+        row.getCell(1).value = line;
+        row.font = { bold: true };
+        row.height = 22;
+
+        for (let d = 1; d <= daysInMonth; d++) {
+          const date = new Date(year, monthIndex, d);
+          const dateStr = `${year}-${String(monthIndex+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+          const cells = assignments.filter(a => a.date === dateStr && a.line === line);
+          const cell = row.getCell(d + 1);
+          cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+
+          if (date.getDay() === 0) {
+            cell.value = "Holiday";
+            cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFCCCC" }};
+            continue;
+          }
+
+          if (cells.length) {
+            const type = cells[0].type;
+            cell.value = cells.map(a => a.manager).join(", ");
+            cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: colors[type] || "FFFFFFFF" }};
           }
         }
-      }
-
-      row.eachCell((cell) => {
-        cell.border = {
-          top: { style: "thin", color: { argb: "FFDDDDDD" } },
-          left: { style: "thin", color: { argb: "FFDDDDDD" } },
-          bottom: { style: "thin", color: { argb: "FFDDDDDD" } },
-          right: { style: "thin", color: { argb: "FFDDDDDD" } },
-        };
       });
-
-      currentRow++;
     });
-  });
 
-  // Freeze panes
-  sheet.views = [{ state: "frozen", xSplit: 1, ySplit: 3 }];
+    sheet.views = [{ state: "frozen", xSplit: 1, ySplit: 3 }];
+    sheet.getColumn(1).width = 32;
+    for (let i = 2; i <= totalCols; i++) sheet.getColumn(i).width = 11;
 
-  // Set column widths
-  sheet.getColumn(1).width = 32;
-  for (let i = 2; i <= totalCols; i++) sheet.getColumn(i).width = 11;
+    await workbook.xlsx.writeFile(excelPath);
+    console.log("📊 Excel Built:", excelPath);
 
-  // Legend
-  const legendStart = currentRow + 2;
-  sheet.getRow(legendStart).getCell(1).value = "LEGEND:";
-  sheet.getRow(legendStart).getCell(1).font = { bold: true, size: 12 };
-
-  const legendItems = [
-    { text: "Value Stream Leader", color: "FFB7E4C7" },
-    { text: "CFT Member", color: "FFE2C2FF" },
-    { text: "Customer Quality Engineer", color: "FFB3D9FF" },
-    { text: "Plant Head", color: "FFFFCC99" },
-    { text: "Sunday - Holiday", color: "FFFFCCCC" },
-  ];
-
-  legendItems.forEach((item, i) => {
-    const row = sheet.getRow(legendStart + i + 1);
-    row.getCell(1).value = item.text;
-    row.getCell(1).font = { size: 10 };
-    row.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: item.color } };
-    row.getCell(1).border = {
-      top: { style: "thin" },
-      left: { style: "thin" },
-      bottom: { style: "thin" },
-      right: { style: "thin" },
-    };
-  });
-
-  await workbook.xlsx.writeFile(excelPath);
-  console.log("📁 Download Excel created successfully:", excelPath);
+  } catch (err) {
+    console.error("❌ Excel Build Error:", err);
+    throw err;
+  }
 }
+
+
+
+
+
+
+
 
 
 // --------------------------------------------------
