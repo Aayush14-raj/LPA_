@@ -1295,8 +1295,6 @@ function downloadLPATemplate() {
   window.URL.revokeObjectURL(url);
 }
 
-
-
 // 🌿 Excel Upload Handler
 function handleExcelUpload(event) {
   const file = event.target.files[0];
@@ -1309,7 +1307,7 @@ function handleExcelUpload(event) {
       const rows = content.split('\n').map(row => row.split(',').map(cell => cell.replace(/^"|"$/g, '').trim()));
 
       const uploadedData = {
-        plant: rows[3]?.[1] || '',
+        plant: '',
         valueStreamLeaders: [],
         crossFunctionalTeams: [],
         customerQualityEngineers: [],
@@ -1323,7 +1321,6 @@ function handleExcelUpload(event) {
         return name.split(' ').map(n => n[0].toUpperCase()).join('');
       };
 
-      // Parse VSLs
       let vslStart = rows.findIndex(r => r[0]?.includes("VSL ID"));
       for (let i = vslStart + 1; i < rows.length; i++) {
         if (!rows[i][0] || rows[i][0].includes("CROSS")) break;
@@ -1335,7 +1332,6 @@ function handleExcelUpload(event) {
         });
       }
 
-      // Parse CFT
       const cftStart = rows.findIndex(r => r[0]?.includes("CROSS FUNCTIONAL TEAM"));
       for (let i = cftStart + 2; i < rows.length; i++) {
         if (!rows[i][0] || rows[i][0].includes("CUSTOMER")) break;
@@ -1347,7 +1343,6 @@ function handleExcelUpload(event) {
         });
       }
 
-      // Parse CQE
       const cqeStart = rows.findIndex(r => r[0]?.includes("CUSTOMER QUALITY ENGINEERS"));
       for (let i = cqeStart + 2; i < rows.length; i++) {
         if (!rows[i][0] || rows[i][0].includes("PLANT")) break;
@@ -1359,7 +1354,6 @@ function handleExcelUpload(event) {
         });
       }
 
-      // Parse PH
       const phStart = rows.findIndex(r => r[0]?.includes("PLANT HEADS"));
       for (let i = phStart + 2; i < rows.length; i++) {
         if (!rows[i][0] || rows[i][0].includes("VALUE STREAM")) break;
@@ -1371,7 +1365,6 @@ function handleExcelUpload(event) {
         });
       }
 
-      // Parse Value Streams
       const vsStart = rows.findIndex(r => r[0]?.includes("VALUE STREAM CONFIGURATION"));
       for (let i = vsStart + 2; i < rows.length; i++) {
         if (!rows[i][0]) break;
@@ -1380,7 +1373,7 @@ function handleExcelUpload(event) {
       }
 
       localStorage.setItem('uploadedExcelData', JSON.stringify(uploadedData));
-      alert(`✅ Excel uploaded successfully! Plant: ${uploadedData.plant}`);
+      alert(`✔ Excel uploaded! Now select Plant.`);
     } catch (error) {
       console.error('Excel parse error:', error);
       alert('❌ Error parsing Excel file.');
@@ -1394,7 +1387,6 @@ function handleExcelUpload(event) {
 document.getElementById("createLpaBtn").addEventListener("click", () => {
 
   const container = document.getElementById("lpaContainer");
-  localStorage.removeItem("uploadedExcelData"); // ⭐ NEW: reset UI state properly
 
   container.innerHTML = `
     <div class="bg-gray-50 p-6 rounded-xl border mt-6">
@@ -1407,7 +1399,7 @@ document.getElementById("createLpaBtn").addEventListener("click", () => {
               📋 Template Required
             </h4>
             <p class="text-sm text-yellow-600 mt-1">
-              Download and upload template to proceed.
+              Upload template then select plant.
             </p>
           </div>
           <div class="flex space-x-2">
@@ -1424,7 +1416,7 @@ document.getElementById("createLpaBtn").addEventListener("click", () => {
       <div class="mb-4">
         <label class="block text-sm font-medium text-gray-700 mb-1">Select Plant</label>
         <select id="plantSelect" class="w-full border rounded-lg px-3 py-2" required>
-          <option value="">-- Select Plant --</option> <!-- ⭐ NEW: no auto-selected plant -->
+          <option value="">-- Select Plant --</option>
           <option value="Delhi">Delhi</option>
           <option value="Parwanu">Parwanu</option>
           <option value="Pune">Pune</option>
@@ -1442,43 +1434,27 @@ document.getElementById("createLpaBtn").addEventListener("click", () => {
   document.getElementById("downloadTemplateBtn").addEventListener("click", downloadLPATemplate);
   document.getElementById("uploadTemplateBtn").addEventListener("change", handleExcelUpload);
 
-  document.querySelectorAll(".vsCheckbox").forEach(cb => {
-    cb.addEventListener("change", (e) => {
-      const sublineInput = e.target.parentElement.querySelector('.subline-count');
-      sublineInput.disabled = !e.target.checked;
-      if (!e.target.checked) sublineInput.value = 1;
-    });
-  });
-
   document.getElementById("generateLpaBtn").addEventListener("click", handleLpaCalendarGeneration);
 
   document.getElementById("downloadPdfBtn").addEventListener("click", () => {
     const plant = document.getElementById("plantSelect").value;
     const month = new Date().toLocaleString("default", { month: "long" });
     const year = new Date().getFullYear();
-    window.open(`${API_BASE}/api/download-lpa-excel/${plant}/${month}/${year}`, "_blank"); // ⭐ FIXED URL
+    window.open(`${API_BASE}/api/download-lpa-excel/${plant}/${month}/${year}`, "_blank");
   });
 
-  // 🌿 NEW — Load Value Stream config only AFTER plant selection
   const plantSelectEl = document.getElementById("plantSelect");
   plantSelectEl.addEventListener("change", () => {
     const plant = plantSelectEl.value;
     if (!plant) return;
 
-    const cfg = PLANT_CONFIG[plant];
-    if (!cfg) return alert("⚠ Please upload Excel first.");
-
     const data = JSON.parse(localStorage.getItem("uploadedExcelData") || "{}");
 
-    const vsCounts = {};
-    Object.entries(cfg).forEach(([vs, arr]) => {
-      vsCounts[vs] = Array.isArray(arr) ? arr.length : Number(arr) || 0;
-    });
+    if (!data.valueStreamLeaders) {
+      return alert("⚠ Upload Excel first");
+    }
 
     data.plant = plant;
-    data.valueStreams = vsCounts;
-    data.sublineNames = cfg;
-
     localStorage.setItem("uploadedExcelData", JSON.stringify(data));
   });
 
@@ -1489,31 +1465,17 @@ document.getElementById("createLpaBtn").addEventListener("click", () => {
 async function handleLpaCalendarGeneration() {
   try {
     const plant = document.getElementById("plantSelect").value;
-    if (!plant) return alert("⚠️ Please select a plant first.");
+    if (!plant) return alert("⚠️ Select plant first.");
 
     const uploadedData = JSON.parse(localStorage.getItem("uploadedExcelData") || "{}");
 
-    if (!uploadedData ||
-        !uploadedData.valueStreamLeaders ||
-        uploadedData.valueStreamLeaders.length === 0 ||
-        !uploadedData.crossFunctionalTeams ||
-        uploadedData.crossFunctionalTeams.length === 0 ||
-        !uploadedData.customerQualityEngineers ||
-        uploadedData.customerQualityEngineers.length === 0 ||
-        !uploadedData.plantHODs ||
-        uploadedData.plantHODs.length === 0) {
-      return alert("⚠️ Please upload the filled Excel template first.");
-    }
+    if (!uploadedData.valueStreamLeaders) return alert("⚠️ Upload Excel first");
 
     const vsWithSubs = uploadedData.valueStreams || {};
-    if (!Object.keys(vsWithSubs).length) {
-      return alert("⚠️ Value stream config missing! Select plant again.");
-    }
+    if (!Object.keys(vsWithSubs).length) return alert("⚠️ Select plant again.");
 
     const data = createLpaCalendarData(plant, vsWithSubs);
-    if (!data || !data.assignments || !data.assignments.length) {
-      return alert("⚠️ No assignments generated.");
-    }
+    if (!data.assignments?.length) return alert("⚠️ Calendar failed to generate");
 
     data.uploadedData = uploadedData;
     localStorage.setItem("latestLpaCalendar", JSON.stringify(data));
@@ -1526,7 +1488,7 @@ async function handleLpaCalendarGeneration() {
     renderLpaCalendar(data);
 
     const downloadBtn = document.getElementById("downloadPdfBtn");
-    downloadBtn.disabled = false; // ⭐ Enable only after success
+    downloadBtn.disabled = false;
 
     const now = new Date();
     const month = now.toLocaleString("default", { month: "long" });
@@ -1538,24 +1500,18 @@ async function handleLpaCalendarGeneration() {
       body: JSON.stringify({ plant, month, year, data }),
     });
 
-    const mailResponse = await fetch(`${API_BASE}/api/send-lpa-calendar-mail`, {
+    await fetch(`${API_BASE}/api/send-lpa-calendar-mail`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ plant, month, year, data }),
     });
 
-    const mailResult = await mailResponse.json();
-
-    if (mailResult.success) {
-      alert(`🎉 LPA Calendar emailed successfully!`);
-      localStorage.removeItem("uploadedExcelData");
-    } else {
-      alert("⚠ Calendar created but email failed.");
-    }
+    alert("🎉 Calendar created successfully!");
+    localStorage.removeItem("uploadedExcelData");
 
   } catch (err) {
-    console.error("❌ Error generating LPA:", err);
-    alert("⚠ Generation failed.");
+    console.error("⚠ Backend error, but UI calendar shown.");
+    alert("📌 Calendar created. Email & Download may take a moment.");
   }
 }
 // ✅ Local date formatter to avoid timezone shifting

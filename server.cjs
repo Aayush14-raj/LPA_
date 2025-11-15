@@ -10,6 +10,13 @@ const nodemailer = require("nodemailer");
 const ExcelJS = require("exceljs");
 const mysql = require("mysql2");
 const mysqlPromise = require("mysql2/promise");
+// ⭐ Required for Render frontend requests
+app.use(cors({
+  origin: "*",
+  methods: ["GET", "POST"],
+  allowedHeaders: ["Content-Type"]
+}));
+
 
 // Load correct env file depending on environment
 if (process.env.NODE_ENV === "production") {
@@ -635,7 +642,8 @@ app.post("/api/send-lpa-calendar-mail", async (req, res) => {
     // ============================================================
     const safePlant = (plant || "Plant").replace(/\s+/g, "_");
     const fileName = `LPA_Calendar_${safePlant}_${month}_${year}.xlsx`;
-    const excelPath = path.join(pdfDir, fileName);
+    const excelPath = path.join("/tmp", fileName); // Render-safe storage
+
 
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet(`${month} ${year}`);
@@ -823,34 +831,54 @@ app.post("/api/send-lpa-calendar-mail", async (req, res) => {
 
 
 
-// ============================================================
-// 📥 API: Download LPA Calendar Excel
-// ============================================================
-app.get("/api/download-lpa-excel/:plant/:month/:year", (req, res) => {
+// 🔹 DOWNLOAD LPA EXCEL — Always regenerate latest file
+app.get("/api/download-lpa-excel/:plant/:month/:year", async (req, res) => {
   try {
     const { plant, month, year } = req.params;
-    const fileName = `LPA_Calendar_${plant}_${month}_${year}.xlsx`;
-    const excelPath = path.join(pdfDir, fileName); // Reuse same directory for generated files
+    const filePath = path.join("/tmp", `LPA_Calendar_${plant}_${month}_${year}.xlsx`);
 
-    if (fs.existsSync(excelPath)) {
-      // ✅ Send Excel file to client for download
-      res.download(excelPath, fileName, (err) => {
-        if (err) {
-          console.error("❌ Error sending Excel file:", err);
-          res.status(500).json({ error: "Failed to download Excel file." });
-        }
-      });
-    } else {
-      res.status(404).json({ error: "Excel file not found. Please regenerate the calendar." });
+    // 🔹 Get latest data from database
+    const [rows] = await dbPromise.query(
+      "SELECT data_json FROM lpa_calendar WHERE plant=? AND month=? AND year=? LIMIT 1",
+      [plant, month, year]
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ error: "No calendar found" });
     }
+
+    const data = JSON.parse(rows[0].data_json);
+
+    // 🔹 Generate fresh Excel file for download
+    await generateLpaExcelForDownload(plant, month, year, data, filePath);
+
+    return res.download(filePath, `LPA_Calendar_${plant}_${month}_${year}.xlsx`);
   } catch (err) {
-    console.error("❌ Download error:", err);
-    res.status(500).json({
-      error: "Error downloading Excel",
-      details: err.message,
-    });
+    console.error("❌ Download Error:", err);
+    return res.status(500).json({ error: "Download failed" });
   }
 });
+// 🔧 Helper: Generate Excel for Download Only
+async function generateLpaExcelForDownload(plant, month, year, data, excelPath) {
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet(`${month} ${year}`);
+
+  const assignments = data?.assignments || [];
+  const daysInMonth = new Date(year, new Date(`${month} 1, ${year}`).getMonth() + 1, 0).getDate();
+
+  sheet.getRow(1).getCell(1).value = `${plant} – ${month} ${year}`;
+  sheet.getRow(1).font = { bold: true };
+  
+  for (let i = 1; i <= daysInMonth; i++) {
+    sheet.getRow(2).getCell(i + 1).value = i;
+  }
+
+  await workbook.xlsx.writeFile(excelPath);
+  console.log("📁 Download Excel created:", excelPath);
+}
+
+
+
 // --------------------------------------------------
 // Serve Frontend + Start Server (FINAL)
 // --------------------------------------------------
